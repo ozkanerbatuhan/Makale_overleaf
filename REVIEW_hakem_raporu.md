@@ -1,374 +1,319 @@
-# Hakem Raporu
+# Hakem Raporu — v2 (kod incelemesi + ampirik doğrulama sonrası)
 
 **Makale:** An Ethernet-Enabled Customizable Neural Inference Framework on Low-Cost FPGA SoC for High-Frequency Trading
-**Hedef dergi:** Journal of Systems Architecture (Elsevier, Q1)
-**İnceleme kapsamı:** `main.tex` + `references.bib` + VHDL (`hft.srcs/sources_1/new/`) + Vitis firmware (`lwip_echo_server/src/`)
+**Hedef:** Journal of Systems Architecture (Elsevier, Q1)
+**Kapsam:** `main.tex`, `references.bib`, VHDL (`hft.srcs/sources_1/new/`), Vitis firmware (`lwip_echo_server/src/`), host araçları (`pc_test/`)
+**Kısıt:** RTL değişikliği yok, yeni ölçüm tercihen yok
 **Tarih:** 28 Temmuz 2026
 
----
-
-## 0. Özet ve Tavsiye
-
-**Tavsiye: Major Revision (mevcut haliyle reddedilme riski yüksek).**
-
-Altta yatan mühendislik işi sağlam: 3 nöron/çevrim SIMD, 13 kademeli, tam pipeline'lanmış 192 çarpıcılı bir MAC dizisi, çalışan bir AXI-DMA/AXI-Stream veri yolu, gerçek donanım üzerinde osiloskopla ölçülmüş katman süreleri ve PS tarafında donanım sayacıyla (Global Timer) alınmış aşama bazlı gecikme dökümü. Bu, birçok "FPGA'da NN" makalesinden daha fazla gerçek ölçüm içeriyor.
-
-Ancak makale bu haliyle JSA hakeminden geçmez. Üç kategoride sorun var:
-
-1. **Metin ile kodun çeliştiği yerler** (argmax, feature preparation, runtime weight loading, "yeniden sentez gerekmez" iddiası). Hakem kodu görmese bile bunların bir kısmı metin içi tutarsızlıktan yakalanır.
-2. **Ölçüm metodolojisinin savunulamaz olduğu yerler** (Ethernet "reception" ölçümünün ne olduğu, enstrümantasyon yükünün karakterize edilmemesi, p99'ların toplanması, iki farklı end-to-end sayısı).
-3. **Bilimsel çerçevenin eksikliği** (3 kaynak, veri kümesi hiç tanımlanmamış, %61.7 doğruluk için taban çizgisi yok, adil bir yazılım karşılaştırması yok).
-
-En kritik tek nokta aşağıda **M1**: sabit noktalı donanım ile Python Q8.8 referansı arasındaki eşleşmenin neden %100 değil %96.85 olduğu. Kodda muhtemel sebebi buldum ve aşağıda yazdım.
+> **v1'den farkı:** v1'deki M1 (yuvarlama hatası) ve M7 (p99 toplama) teşhisleri **yanlış çıktı**, geri çekildi. Kök neden ampirik olarak saptandı ve aşağıda K1'de. Gecikme sonuçlarının ham logdan yeniden üretilebildiği doğrulandı.
 
 ---
 
-## MAJOR — Kabul için mutlaka giderilmeli
+## 0. Yönetici Özeti
 
-### M1. FPGA ile Python Q8.8 eşleşmesi neden %100 değil? (Tablo 6)
+Makale iki yarıya ayrılıyor ve bu iki yarının durumu birbirinden tamamen farklı:
 
-Tablo 6: *"Output match rate (Python Q8.8 vs FPGA) = %96.85 (159,447/164,627)"*, *"Max absolute output error = 1.374 (mean 0.335)"*.
+**Donanım yarısı sağlam ve savunulabilir.** Gecikme, timing, kaynak ve güç sonuçlarının hepsini bağımsız olarak doğruladım. Tablo 10'un tüm hücrelerini 1,004,229 satırlık ham logdan yeniden hesapladım — birebir tutuyor. RTL'den türettiğim analitik çevrim modeli osiloskop ölçümleriyle dört katmanda da birebir uyuşuyor. Bu kısım yayınlanabilir.
 
-İki taraf da **bit-exact sabit noktalı** aritmetik yapıyorsa bu oran %100 olmalıdır. %3.15 uyuşmazlık ve Q8.8 ölçeğinde 1.374 gibi büyük bir maksimum hata, ya bir dönüştürme farkına ya da bir donanım hatasına işaret eder. Makale bunu hiç tartışmıyor — hakem bunu ilk soracaktır ve tatmin edici cevap gelmezse "donanım doğrulanmamış" der.
+**ML yarısı desteklenmiyor.** Öznitelik boru hattında normalizasyon yok; karta giden vektör 64 elemanın 63'ü sıfır, biri taşma artefaktı. Tablo 6 ve Tablo 7 mevcut dosyalardan yeniden üretilemiyor. Bu haliyle Bölüm 5.2 ve abstract'taki doğruluk iddiaları savunulamaz.
 
-**Kodda bulduğum muhtemel sebep** — `lwip_echo_server/src/mlp_weight_loader.h:9`:
+**Tavsiye:** Makaleyi donanım/gecikme/framework makalesine daraltın ve doğruluk iddialarını çıkarın. Bu, sıfır kart zamanı ve sıfır RTL değişikliğiyle mümkün. İsteğe bağlı olarak ~1 saatlik kısa bir tezgâh koşumu, "bit-exact doğrulanmış" iddiasını geri kazandırır (bkz. Bölüm 3, Yol B).
 
-```c
-static inline int float_to_q88(float val) { return (int)(val * 256.0f); }
+---
+
+## 1. Kök Neden Analizi
+
+### K1. Öznitelik boru hattında normalizasyon yok — tek kök neden
+
+Zincirin tamamı ampirik olarak izlendi:
+
+**(a) Eğitim verisi normalize edilmemiş.** `pc_test/data_prep_binance.py` 40 özniteliği doğru üretiyor (son 20 işlem × fiyat/miktar) ama normalizasyon yorum satırında:
+
+```python
+# Normalizasyon veya Scaling gerekliyse buraya eklenebilir.
+# Orn: feature_df = (feature_df - feature_df.mean()) / feature_df.std()
 ```
 
-Bu **sıfıra doğru budama (truncation)**, yuvarlama değil. Python tarafındaki kuantizasyon neredeyse kesinlikle `np.round()` kullanıyor. Her ağırlıkta ortalama 0.5 LSB'lik sistematik bir sapma, 64 girişli bir MAC'te birikerek çıkışta tam da gözlenen mertebede fark üretir. Tek satırlık düzeltme:
+Sonuç: ham BTC fiyatı (~76,834) ile işlem miktarı (~0.00065) aynı vektörde, aralarında ~10⁸ kat ölçek farkı var.
 
-```c
-static inline int float_to_q88(float val) { return (int)lrintf(val * 256.0f); }
-```
-
-Ayrıca bu fonksiyonda **doygunluk (saturation) yok**: |val| > 127.996 olan bir ağırlık sessizce sarmalanır.
-
-**Yapılması gereken:** Düzeltmeyi uygulayıp ölçümü tekrarlayın. Eşleşme %100'e (veya ~%99.9'a) çıkarsa bunu makalede *bit-exact doğrulama* olarak raporlayın — bu, makalenin en güçlü katkılarından biri olur. Çıkmazsa, kalan farkın kaynağını (doygunluk? ReLU sınırı? padding?) izole edip raporlayın. Her iki durumda da makaleye kısa bir "Fixed-point verification" alt bölümü ekleyin.
-
-### M2. Argmax **donanımda değil, yazılımda** — Tablo 5 yanlış
-
-Tablo 5 (`tab:hw_sw_partitioning`) "Argmax decision → PL (hardware)" diyor. Bölüm 3'te de "the PL implements the inference core, the argmax decision" ifadesi var.
-
-Gerçekte VHDL'de argmax **yok**. `mlp_axi_wrapper.vhd` sadece `output_rd_data <= buf_A(addr)` sunuyor; LED bloğundaki `-- Simdilik sadece argmax sonucu goster` yorumu da bunu doğruluyor. Karar `main.c:177-189`'da PS yazılımında alınıyor:
-
-```c
-s16 out0 = mlp_read_reg(0x100); s16 out1 = ...; s16 out2 = ...;
-u8 final_decision = 0;
-if (out1 > out0 && out1 > out2) final_decision = 1; else if (...) ...
-```
-
-Dahası, bu üç AXI-Lite okuması **Tablo 10'daki 0.96 µs "Result readout"** kaleminin ta kendisi. Yani makalenin "donanımda" dediği karar aşaması, ölçülen gecikmenin gözle görülür bir kısmını oluşturan yazılım aşamasıdır.
-
-**Yapılması gereken:** Ya Tablo 5'i ve ilgili cümleleri düzeltin (argmax = PS), ya da argmax'ı RTL'e taşıyın (12. kademeden sonra 3 elemanlı karşılaştırıcı — birkaç LUT). İkincisi hem daha dürüst hem de 0.96 µs'i tek okumaya indirdiği için makaleyi güçlendirir. Şiddetle ikincisini öneririm.
-
-### M3. "Feature preparation" PS'te yapılmıyor
-
-Makale boyunca (Abstract, Bölüm 3.1, Tablo 5, Tablo 10) PS'in "packet reception, feature preparation, and control" yaptığı söyleniyor. Kodda PS'in yaptığı tek şey (`main.c:152`):
-
-```c
-memcpy(inputs, payload + 4, 64 * sizeof(s16));
-```
-
-Host, **zaten Q8.8'e kuantize edilmiş, zaten 64'e sıfır-doldurulmuş** bir vektör gönderiyor. Yani öznitelik üretimi de, kuantizasyon da, padding de host PC'de yapılıyor. Bu, "Ethernet'ten piyasa verisi gelir → karar çıkar" anlatısını ciddi biçimde zayıflatır: sistem piyasa verisi değil, hazır öznitelik vektörü alıyor.
-
-Ayrıca **128 baytlık bir `memcpy` için 0.70 µs** (667 MHz Cortex-A9'da ~470 çevrim) fizikî olarak açıklanamaz; bu değer büyük ölçüde iki `XTime_GetTime()` çağrısının kendi maliyetidir (bkz. M4).
-
-**Yapılması gereken:** Ya gerçek öznitelik hesaplamasını (normalizasyon, kuantizasyon, pencereleme) PS'e taşıyın ve maliyetini ölçün, ya da makaleyi dürüstçe yeniden çerçeveleyin: "PS performs packet reception and buffer handoff; feature engineering and quantization are performed upstream on the host." Tablo 10'daki satırın adını da "packet parsing" olarak değiştirin.
-
-### M4. Ölçüm enstrümantasyonu karakterize edilmemiş ve sonuçları kirletiyor
-
-`main.c`'de `ENABLE_STAGE_TIMING 1` ile derlenmiş yolda:
-
-- Kritik yola **5 adet 64-bit Global Timer okuması** ekleniyor (her biri hi/lo/hi retry döngüsü ile, `main.c:36-43`).
-- **Yalnızca enstrümantasyon aktifken** çalışan ek bir meşgul bekleme var: `while (XAxiDma_Busy(&AxiDma, ...)) { }` (`main.c:165`). Bu, ölçümsüz yolda **olmayan** bir senkronizasyon noktasıdır.
-- Yanıt paketi 1 bayt yerine **21 bayt** oluyor.
-
-Yani Tablo 10'un ürediği koşum ile Tablo 8'in ürediği koşum farklı ikili dosyalardır. Bu, aşağıdaki M5'teki çelişkiyi de büyük olasılıkla açıklıyor.
-
-**Yapılması gereken:** (a) Boş bir ölçüm çifti (`XTime_GetTime` → `XTime_GetTime`) ile timer okuma yükünü ölçüp raporlayın ve aşama değerlerinden çıkarın; (b) Enstrümantasyonlu ve enstrümantasyonsuz derlemelerin uçtan uca gecikmesini yan yana verin ki okuyucu gözlemci etkisini görsün; (c) Global Timer'ın çözünürlüğünü (CPU/2 ≈ 333.3 MHz → 3 ns) ve XPAR ile alınan gerçek frekansı makalede belirtin.
-
-### M5. İki farklı uçtan uca gecikme, açıklanmadan yan yana duruyor
-
-| Kaynak | Koşum boyutu | Ortalama | Medyan | p99 |
-|---|---|---|---|---|
-| Tablo 8 (`tab:latency_metrics`) | 120,883 | 65.6 µs | 66.3 µs | 79.6 µs |
-| Tablo 10 (`tab:latency_breakdown`) | 1,004,229 | 68.56 µs | 68.50 µs | 80.92 µs |
-
-Aynı büyüklük için iki farklı sayı veriliyor, aralarındaki ilişki hiç kurulmuyor. Hakem bunu "hangi sayıya inanacağız?" diye soracaktır. (Muhtemel cevap M4'te.)
-
-**Yapılması gereken:** Tek bir referans koşum tanımlayın, diğerini açıkça farklı bir konfigürasyon olarak etiketleyin ve farkı açıklayın.
-
-### M6. "Ethernet packet reception" ölçümü, iddia edilen şeyi ölçmüyor
-
-Tablo 2 bunu *"PS-side NIC-to-buffer time"*, Tablo 10 *"Ethernet packet reception (EMAC + lwIP)"* olarak tanımlıyor. Kodda (`main.c:47`, `main.c:298`):
-
-```c
-static XTime g_t_poll;   /* taken in main loop right before xemacif_input */
-...
-XTime_GetTime(&g_t_poll);   // ana döngüde, her turda
-...
-XTime_GetTime(&t_cb);       // UDP callback'te
-stg[0] = t_cb - g_t_poll;
-```
-
-Bu, "paketin geliş anından buffer'a yazılışına kadar geçen süre" **değildir**. Bu, *"ana döngünün son yoklamasından callback'e kadar geçen süre"*dir — yani paketin varış anının poll döngüsü fazına göre nereye düştüğüne bağlı bir artefakttır. Makale zaten "bimodal, reflecting the phase of the polling loop" diyerek bunu itiraf ediyor ama etiketi düzeltmiyor. 7.59 µs ortalama, EMAC/lwIP maliyeti olarak yorumlanamaz.
-
-**Yapılması gereken:** Ya etiketi dürüstçe değiştirin ("polling-loop detection latency"), ya da gerçek alım süresini ölçün (PL'de bir GPIO/timestamp yakalayıcı, ya da EMAC RX kesmesinden itibaren zaman damgası). Bu düzeltilirse "board subtotal 14.4 µs" rakamı da değişecektir.
-
-### M7. p99 değerlerinin toplanması istatistiksel olarak geçersiz
-
-Tablo 10'da "Board subtotal p99 = 21.03" satırı, aşama p99'larının toplanmasıyla elde edilmiş görünüyor (14.18+0.86+3.78+1.72+0.97 = 21.51). Yüzdelikler toplanamaz; bir koşumdaki p99'ların hepsi aynı pakette gerçekleşmez. Bu satır ya paket-başına toplamların gerçek p99'u olarak yeniden hesaplanmalı (ham veriden yapılabilir, tüm aşamalar aynı pakette kaydediliyor), ya da kaldırılmalıdır. Aynı şey p50 satırı için de geçerli.
-
-### M8. Adil bir yazılım karşılaştırması yok — makalenin merkezî iddiası desteksiz
-
-Makale 768 ns'lik **çekirdek** gecikmesini, 66–476 µs'lik **uçtan uca ağ round-trip** ile karşılaştırıyor. Bunlar aynı şey değil; ikincisinin içinde host NIC, kablo, lwIP, PS yazılımı var. Bu karşılaştırma "FPGA çıkarımı CPU çıkarımından hızlıdır" iddiasını **kanıtlamaz**.
-
-Ayrıca Bölüm 5.4'teki Linux-vs-Windows karşılaştırması bir *inference* taban çizgisi değil, bir *host ağ yığını* karşılaştırmasıdır. "Software Baseline: OS-Induced Latency" başlığı yanıltıcı.
-
-**Gereken taban çizgileri (en az ikisi):**
-
-1. Aynı 40-64-32-16-3 MLP'nin **PS'in kendi Cortex-A9'unda** (bare-metal, aynı Q8.8, NEON'lu ve NEON'suz) çıkarım süresi. Aynı çip, aynı model, aynı veri — en adil karşılaştırma budur.
-2. Bir masaüstü CPU'da tek örneklik (batch=1) çıkarım süresi (NumPy/PyTorch/ONNX Runtime, hangisiyse belirtin).
-3. **README'nizde zaten var ve makalede yok:** *"Original Sequential FSM Latency: ~56 µs over AXI-Lite"*. Bu mükemmel bir kendi-içinde taban çizgisidir: aynı takım, aynı kart, aynı model, seri FSM → 56 µs, paralel pipeline → 0.768 µs, **73×**. Bunu makaleye koymamak büyük bir kayıp. Ölçüm koşullarıyla birlikte ekleyin.
-
-### M9. Veri kümesi ve sınıflandırma sonuçları raporlanmamış — %61.7 anlamsız
-
-Makale şunların **hiçbirini** vermiyor:
-
-- Veri kümesinin ne olduğu (enstrüman, borsa, dönem, örnekleme frekansı, kaynak)
-- 40 özniteliğin ne olduğu (tek bir örnek bile yok)
-- Etiketlemenin nasıl yapıldığı (BUY/HOLD/SELL eşikleri, horizon)
-- Sınıf dağılımı
-- Eğitim/doğrulama/test bölünmesi ve boyutları (yalnızca "164,627" bir tabloda geçiyor, tanımlanmadan)
-- **Taban çizgisi doğruluk** (çoğunluk sınıfı tahmincisi)
-- Karışıklık matrisi, sınıf bazlı precision/recall
-- Herhangi bir işlem-anlamlı metrik (P&L, Sharpe, hit rate, ya da en azından makro-F1'in tam tablosu)
-
-3-sınıflı, muhtemelen dengesiz bir problemde **%61.74 doğruluk, çoğunluk sınıfı taban çizgisinden ayırt edilemez olabilir.** Bu haliyle "the trained model" ifadesi boştur ve hakem "model hiçbir şey öğrenmemiş olabilir" diyecektir. Makalenin kuantizasyon iddiası (float ≈ Q8.8) da anlamını yitirir: iki model de aynı derecede işe yaramıyorsa aynı çıktıyı vermeleri sürpriz değildir.
-
-**Yapılması gereken:** Tam bir "Dataset and Task" alt bölümü ekleyin. En azından çoğunluk-sınıfı ve rastgele taban çizgilerini, sınıf dağılımını ve karışıklık matrisini verin. Model tahmini gerçekten taban çizgisinin üstündeyse bunu açıkça gösterin; değilse makaleyi dürüstçe "the ML task is a placeholder to exercise the framework" diye çerçeveleyin (bu kabul edilebilir bir konumdur, gizlemek değildir).
-
-### M10. Kaynakça 3 adet — JSA için tek başına ret sebebi
-
-`references.bib` içinde yalnızca `Brown2021`, `Umuroglu2017`, `sparknoc` var; dosya hâlâ şablon yorumlarını taşıyor (*"Add your bibliographic entries here"*). Bir Elsevier Q1 dergisinde 3 kaynaklı bir "Related Work" bölümü editör masasında elenir.
-
-**En az 25-35 kaynağa çıkarılmalı.** Kapsanması gereken başlıklar:
-
-- FPGA tabanlı finansal hızlandırma / düşük gecikmeli ticaret (Lockwood ve ark. NetFPGA tabanlı trading, Leber/Geib/Litz FPGA algorithmic trading, Morris ve ark., Tang & Song, Denholm ve ark.)
-- Sabit noktalı / düşük bit-genişlikli NN çıkarımı (Courbariaux, Jacob ve ark. quantization-aware training, Gholami quantization survey)
-- FPGA NN framework'leri — burada rakipsiz değilsiniz: **hls4ml** (Duarte ve ark. 2018, JINST) doğrudan sizin sub-µs MLP nişinizde ve karşılaştırılmalı; FINN-R, Vitis-AI, DNNWeaver, Caffeine, Angel-Eye
-- Zynq PS-PL veri yolu / AXI-DMA gecikme çalışmaları
-- Ağ yığını ve OS jitter literatürü (kernel bypass, DPDK, solarflare/onload) — Bölüm 5.4'ün iddiasını desteklemek için
-- Zaman serisi / limit order book tahmini (DeepLOB, Ntakaris ve ark. FI-2010 benchmark) — hem görev tanımı hem taban çizgisi için
-
-**Özellikle hls4ml'i atlamayın.** Hakem kesinlikle soracaktır: "hls4ml zaten Q formatlı MLP'leri FPGA'da sub-µs çalıştırıyor; sizin farkınız ne?" Cevabınız hazır olmalı (cevap muhtemelen: hls4ml her model için yeniden sentez ister, sizinki ağırlıkları çalışma anında yükler — bu gerçek bir fark ve M11'de değinilmesi gereken).
-
-### M11. "Yeniden sentez gerekmez" iddiası kodla çelişiyor (iki yönden)
-
-Bölüm 5.9: *"one reconfigurable core hosts any model that fits the 192-DSP budget, without re-synthesis."*
-
-Kod bunun **hem daha azını hem daha fazlasını** söylüyor:
-
-**Daha azı — iddia fazla geniş.** `framework_pkg.vhd`'de derleme zamanı sabitleri:
-```vhdl
-constant MAX_INPUTS       : integer := 64;
-constant MAX_NEURONS      : integer := 64;
-constant NUM_LAYERS       : integer := 4;
-constant PARALLEL_NEURONS : integer := 3;
-```
-`mlp_engine.vhd`'de `layer_idx : integer range 1 to 4`, dört ayrı `cfg_layerN_out` portu ve ping-pong parite mantığı katman sayısına sabit kodlu. Yani yeniden sentez olmadan desteklenen küme aslında: **en fazla 4 katman, her katman ≤64 nöron, her katman ≤64 giriş**. "192-DSP bütçesine sığan her model" değil. Bu dürüstçe yazılmalı.
-
-**Daha fazlası — kendi katkınızı küçümsüyorsunuz.** Sonuç bölümü *"Future work includes runtime weight loading"* diyor. Oysa çalışma anı ağırlık yükleme **zaten uygulanmış**: `mlp_weight_loader.h` AXI-Lite üzerinden 192 BRAM'e ağırlık basıyor, RTL'de `w_wr_en/w_wr_bram/w_wr_addr` yolu ve `reg_update_flag` ile stream kilitleme mevcut, host GUI'de "model yükle (.bin)" paneli var (Şekil 5c). Bu doğrudan bir iç çelişki ve makalenin en özgün özelliğini gizliyor.
-
-**Yapılması gereken:** Runtime weight loading'i **katkı olarak** öne çıkarın ve ölçün: bir modelin yüklenmesi kaç AXI-Lite yazması ve kaç ms sürüyor? (Kabaca (22+11+6+1)×3×64 ≈ 7,680 ağırlık + 120 bias yazması.) Bu sayı, "hls4ml'den farkımız nedir" sorusunun somut cevabıdır. Sonuç bölümündeki "future work" ifadesini kaldırın.
-
-### M12. Mimarinin çalışma prensibi makalede eksik — sayılar yeniden üretilemez
-
-Makale "192 parallel DSP-based MAC units in a 13-stage pipeline" diyor ama **çevrim başına 3 nöron işlendiğini hiç söylemiyor**. Bu olmadan Tablo 13'teki çevrim sayıları havadan gelmiş görünüyor.
-
-RTL'den çıkan analitik model (`mlp_engine.vhd`, ST_ISSUE + ST_DRAIN_LAYER):
+**(b) Bunun izi eğitilmiş ağırlıklarda görünüyor.** `best_model_32_16_8_t00005.pth` içindeki W1 (32×40) matrisinde:
 
 ```
-cycles(layer) = ceil(N_out / 3) + PIPELINE_DEPTH + 1,   PIPELINE_DEPTH = 13
+Öznitelik  0–18 :  ağırlıkların ~%88'i tam olarak ±0.25'te  (clamp sınırı)
+Öznitelik 19–39 :  ~%0                                      (normal, iç bölgede)
 ```
 
-| Katman | N_out | ceil(N/3) | + drain | Makaledeki ölçüm |
+Keskin bir sınır. 1. katmanın %42'si doymuş durumda ve doygunluk tamamen ilk 19 öznitelikte yoğunlaşmış. Ardışık aggTrades satırlarında fiyatın neredeyse hiç değişmemesi (`76834.36, 76834.36, 76834.36`) ile birebir tutarlı.
+
+Modeller **rastgele değil, gerçekten eğitilmiş** (kırpılmamış değerlerin dağılımı çan eğrisi, satır normları tutarlı) — ama birinci katmanları normalize edilmemiş girdi yüzünden clamp'e dayanmış.
+
+**(c) Çıkarımda ikinci bir taşma.** `linux/hft_engine_linux.cpp:99`:
+
+```cpp
+q88_features.push_back(static_cast<int16_t>(val * 256.0f));
+if (q88_features.size() < 64) q88_features.resize(64, 0);
+```
+
+Doygunluk yok, sessiz sarmalanma var. Koşumda kullanılan `temp_stream_converted.csv` ham aggTrades dosyası (hazırlanmış 40-öznitelik dosyası değil), 8 sütunlu:
+
+```
+ham   : 3960683683, 76834.36, 0.00065, 6308590618, 6308590618, 1779235200183703, False, True
+Q8.8  : [0, 8796, 0, 0, 0, 0, 0, ... 0]        (58'i sıfır dolgu)
+```
+
+- `agg_trade_id`, `first/last_trade_id`, `timestamp` → ×256 int32'yi aşıyor → **0**
+- `quantity` 0.00065 × 256 = 0.166 → budanıyor → **0**
+- `price` 76834.36 × 256 = 19,669,596 → int16'ya sarmalanıyor → **8796** = `price mod 256`
+
+Tek canlı öznitelik, fiyatın 256'ya modu — testere dişi, kesintili, ve fiyat sabitken sabit.
+
+Not: Q8.8'in aralığı ±127.996. Hazırlanmış 40-öznitelik dosyası kullanılsaydı bile BTC fiyatı aralığın **600 katı** dışında kalacağı için aynı taşma yaşanırdı. Yani sorun dosya seçimi değil, ölçekleme.
+
+**(d) Sonuç FPGA logunda:**
+
+```
+HOLD   917,781   91.39%
+BUY     67,065    6.68%
+SELL    19,383    1.93%
+```
+
+### K2. Tablo 6 mevcut dosyalardan yeniden üretilemiyor
+
+`quantization_analysis.py`'ı diskteki tüm modeller × her iki etiket eşlemesi için (8 kombinasyon) 40,000 paket üzerinde koşturdum:
+
+| Model | Eşleme | Match | Emülatör dağılımı |
+|---|---|---|---|
+| `linux/best_model_new` | legacy | **91.41%** | [40000, 0, 0] — hepsine aynı sınıf |
+| `best_model_new` | legacy | 52.92% | [21837, 18163, 0] |
+| `best_model_64_64_32` | fixed | 48.17% | [266, 19576, 20158] |
+| `best_model_32_16_8` | fixed | 47.88% | [474, 19439, 20087] |
+| `best_model_10_16_8` | fixed | 47.34% | [913, 19210, 19877] |
+| `temp_weights.bin` (=32_16_8) | legacy | 5.95% | [2023, 63900, 54077] |
+
+Hiçbiri makaledeki %96.85'i vermiyor. En yüksek değer olan %91.41, **her girdiye aynı sınıfı veren dejenere bir modelden** geliyor ve logun HOLD oranı (%91.39) ile çakışmasından ibaret — eşleşme değil.
+
+**Logu üreten model/veri kombinasyonu diskte mevcut değil.** `pc_test/yapılacaklar.txt` de logun karışık olduğunu not ediyor ("eski + bugünkü permütasyonlu etiketli satırlar var").
+
+Ayrıca `quantization_analysis.py`'ın başlığındaki not, host motorunda bir **sınıf permütasyon hatası** olduğunu belgeliyor (2026-07-12 öncesi motorlar `0→HOLD, 1→BUY, 2→SELL` çözüyordu, firmware ise `0→SELL, 1→HOLD, 2→BUY`). Tablo 7'deki doğruluklar bu hata düzeltilmeden ölçüldüyse geçersizdir.
+
+### K3. Dağıtılan model makalede yazandan farklı
+
+`temp_weights.bin`'in sıfır deseni tamamen yapısal:
+
+| Blok | Sıfır | Anlamı |
+|---|---|---|
+| W1 satır 0–31 | %37.5 | 40 gerçek giriş + 24 dolgu |
+| **W1 satır 32–63** | **%100** | Katman 1'de 32 nöron |
+| W2 / W3 / W4 | %75 / %75 / %50 | 16 / 8 / 3 nöron |
+
+Yani dosyadaki model **40→32→16→8→3**, makale ise 40→64→32→16→3 diyor. Dolgunun kendisi matematiksel olarak doğru (ölü nöronların ağırlık+bias'ı sıfır → ReLU(0)=0). `.pth → .bin` dönüştürücüsünün çıktısı `.pth` ile **bit-birebir aynı** (doğrulandı) — export hattında hata yok.
+
+### K4. Beş modelin topolojileri farklı — ve bu iyi haber
+
+`.pth` tensör boyutlarından:
+
+| Dosya | Topoloji |
+|---|---|
+| `best_model_new` | 40→64→32→16→3 *(makaledeki)* |
+| `best_model_64_64_32_t00005` | 40→64→64→32→3 |
+| `best_model_32_16_8_t00005` | 40→32→16→8→3 |
+| `best_model_10_16_8_t00005` | 40→10→16→8→3 |
+
+Bölüm 5.9: *"the five evaluated models share one identical hardware configuration ... only the weights, and hence the accuracy, differ."* — Topolojiler de farklı.
+
+**Bu düzeltilmesi gereken bir hata değil, öne çıkarılması gereken bir sonuç.** Aynı bitstream'in dört farklı topolojiyi yeniden sentez olmadan çalıştırması, makalenin "framework" iddiasının en güçlü kanıtı ve şu an anlatılmıyor.
+
+---
+
+## 2. Doğrulanmış Sağlam Sonuçlar
+
+Bu bölümdeki her şeyi bağımsız olarak yeniden hesapladım. Hepsi geçerli ve makalede kalmalı.
+
+### D1. Tablo 10 birebir yeniden üretiliyor
+
+1,004,229 satırlık `execution_log_linux.csv`'nin ham tick sütunlarından, paket bazında:
+
+```
+Aşama                 mean     p50     p99   p99.9
+recv (EMAC+lwIP)      7.59    2.56   14.18   14.29
+parse/memcpy          0.70    0.69    0.86    0.92
+AXI-DMA               3.70    3.70    3.78    3.81
+AXIS+MLP core         1.46    1.46    1.72    1.74
+AXI-Lite readout      0.96    0.96    0.97    0.98
+BOARD TOPLAM         14.40    9.41   21.03   21.16
+```
+
+Makaledeki değerlerin aynısı. **v1'deki M7 itirazım yanlıştı ve geri çekiliyor** — p99 aşama p99'larının toplamı değil (o 21.49 verirdi), paket bazında doğru hesaplanmış.
+
+### D2. Analitik çevrim modeli ölçümle birebir uyuşuyor
+
+`mlp_engine.vhd`'nin FSM'inden (ST_ISSUE + ST_DRAIN_LAYER) türettim:
+
+```
+cycles(layer) = ceil(N_out / 3) + 14
+```
+
+| Katman | N_out | ceil(N/3) | Model | Ölçülen |
 |---|---|---|---|---|
 | L1 (40→64) | 64 | 22 | 35 | 35 (280 ns) ✔ |
 | L2 (64→32) | 32 | 11 | 25 | 25 (200 ns) ✔ |
 | L3 (32→16) | 16 | 6 | 20 | 20 (160 ns) ✔ |
-| L4 (16→3)  | 3  | 1 | 15 | 15 (118 ns) ✔ |
-| **Toplam** | | | **95** | 96 (768 ns) |
+| L4 (16→3) | 3 | 1 | 15 | 15 (118 ns) ✔ |
 
-Ölçümler modelle mükemmel uyuşuyor — bu makalenin güçlü bir yanı ve **mutlaka bu formülle birlikte sunulmalı**. Ancak:
+Dört katmanda da tutuyor. **Bu formül makaleye girmeli** — ölçümlerin rastgele değil, mimariden türeyen değerler olduğunu kanıtlıyor ve tek başına bir katkı.
 
-**(a) 768 vs 758 ns farkının açıklaması yanlış.** Makale diyor ki: *"the difference between the total and the sum of the layer times corresponds to the input-streaming and output-decision stages."* Bu doğru olamaz. `dbg_data_in_pulse` motorun ST_IDLE durumunda `start='1'` görüldüğünde atılıyor (`mlp_engine.vhd`) — yani **veri akışı zaten bitmişken**. Dolayısıyla 768 ns içinde input streaming **yok**. Fark aslında 1 çevrim (8 ns) + osiloskop okuma yuvarlaması (118 vs 120 ns). Bunu düzeltin.
+### D3. Kaynak / timing / güç tutarlı
 
-**(b) Tablo 13'ün "Measured Cycles" sütunu ölçülmemiş, türetilmiş.** Süre × 125 MHz ile geri hesaplanmış. Başlığı "Derived cycles (t × f_clk)" yapın veya doğrudan bir sayaçla ölçün.
-
-**(c) Kendi XDC'nizdeki sayılar makaleyle çelişiyor.** `zedboard_mlp.xdc:65-70` şunu diyor:
-```
-CH1 → JA1, CH2 → JA7 : Toplam PL Inference Gecikmesi (92 cycle = 736 ns)
-Layer 1: 35 cycle (280 ns) | Layer 2: 24 cycle (192 ns)
-Layer 3: 19 cycle (152 ns) | Layer 4: 14 cycle (112 ns)
-```
-Makale ise 96 / 25 / 20 / 15 diyor. İki artefakt arasında tutarsızlık var; birini düzeltin (analitik model makaleyi destekliyor, XDC yorumu 1 çevrim eksik sayıyor).
-
-**(d) Boru hattı her katmanda tamamen boşaltılıyor** (`ST_DRAIN_LAYER` → `pipeline_empty`). Katman 4'te 15 çevrimin 13'ü saf drain. Toplam 95 çevrimin ~52'si drain. Bu, tasarımın gerçek bir özelliği ve makalede tartışılmalı: neden katmanlar arası örtüşme yapılmadı (cevap: ping-pong buffer'a yazma ile sonraki katmanın okuması arasındaki bağımlılık), ve bunun maliyeti ne? Dürüst tartışma makaleyi güçlendirir.
-
-### M13. Verimlilik ve throughput hiç raporlanmamış
-
-Makale hiçbir yerde GOP/s ya da çıkarım/saniye vermiyor — ama Tablo 1'de FINN'i "12.3 M cls./s" ve SparkNoC'u "337.2 GOP/s" ile listeliyor. Kendi işiniz için karşılaştırılabilir bir sütun yok; "Main Metric" sütunu elmalarla armutları karşılaştırıyor.
-
-Hesaplanabilir değerler:
-
-- **Tepe hesaplama gücü:** 192 çarpıcı × 2 op × 125 MHz = **48 GOP/s**
-- **Faydalı MAC/çıkarım:** 40·64 + 64·32 + 32·16 + 16·3 = 5,168 MAC
-- **Yayınlanan çarpma/çıkarım (padding dahil):** 7,680 → **padding verimliliği %67**
-- **Ulaşılan hız:** 5,168 × 2 / 768 ns ≈ **13.5 GOP/s** → **tepe değerin %28'i**
-- **Çekirdek throughput:** 1/768 ns ≈ **1.30 M çıkarım/s**
-- **Sistem throughput (stream + wait dahil, wrapper FSM `ST_WAIT` nedeniyle örtüşme yok):** ~1/1.3 µs ≈ **0.77 M çıkarım/s**
-
-Bu %28 verim (drain + padding kaynaklı) makalenin "fully unrolled, fully parallel" retoriğiyle çelişiyor. Sayıları verin ve nedenini açıklayın — hakem zaten hesaplayacak.
-
-### M14. BRAM analizi yanıltıcı: darboğaz DSP değil, bellek organizasyonu
-
-Makale: *"BRAM usage is 70.36%, leaving room for larger feature sets or networks."*
-
-`mlp_engine.vhd` her (nöron-slotu × giriş) çifti için ayrı bir BRAM üretiyor:
-```vhdl
-gen_w_brams: for i in 0 to (PARALLEL_NEURONS * MAX_INPUTS) - 1 generate  -- 192 adet
-```
-Her biri 128×16 bit = 2 Kbit, yani bir RAMB18'in (18 Kbit) yalnızca **~%12'si** dolu. 192 RAMB18 ≈ 96 RAMB36 eşdeğeri + bias → 98.5. Yani **derinlik neredeyse bedava, ama BRAM *sayısı* `PARALLEL_NEURONS × MAX_INPUTS`'e kilitli.**
-
-Sonuç: daha büyük öznitelik kümesi (>64 giriş) veya daha fazla paralel nöron istemek **doğrusal olarak daha fazla BRAM bloğu** ister ve 140'lık bütçeyi hemen aşar. Yani gerçek ölçeklenme sınırı DSP (%87) değil, BRAM blok sayısıdır — ve mevcut derinliğin %88'i boş. Makale bunun tam tersini ima ediyor.
-
-**Yapılması gereken:** Bu analizi dürüstçe yazın ve bir çözüm önerin (birkaç girişi tek BRAM satırında paketlemek, ya da daha geniş BRAM konfigürasyonu kullanmak). Bu, makaleye gerçek bir mimari içgörü katar.
-
-### M15. Güç değeri ölçüm değil, araç tahmini; karşılaştırma tabanı tutarsız
-
-*"The implemented on-chip power is 2.781 W"* — bu Vivado'nun **tahmini** (`power_onchip.jpeg` bir Vivado ekran görüntüsü). Ölçülmüş güç değil, ve switching activity varsayımı (varsayılan %12.5 toggle rate mi, SAIF mi?) belirtilmemiş.
-
-Ayrıca Tablo 14'te 2.78 W (PS7'nin 1.535 W'ı **dahil**) SparkNoC'un 7.6 W'ıyla karşılaştırılıyor — ama makale SparkNoC için "compute power" diyor. Farklı tabanlar. Kendi PL-only rakamınız (~1.25 W) karşılaştırma için doğru olan.
-
-**Yapılması gereken:** "estimated" kelimesini ekleyin, vectorless/SAIF olduğunu belirtin, ideal olarak ZedBoard'un güç rayından (INA/shunt) gerçek ölçüm alın, ve karşılaştırmayı PL-only tabanında yapın.
-
-### M16. Tablo 1 (Related Work) kendi aleyhinize kurulmuş
-
-FINN satırı **0.31 µs** gösteriyor, sizinki "Sub-µs core latency" diyor — yani FINN sizden hızlı ve bu tabloda görünüyor ama hiç tartışılmıyor. Hakem bunu hemen yakalar.
-
-Doğru çerçeve şu olmalı: FINN binarize edilmiş ağlar için, her model için yeniden sentez gerektiren, Ethernet'siz bir akıştır. Sizinki 16-bit doğrulukta, yeniden sentezsiz ağırlık değişimi yapan, ağ-bağlantılı bir sistemdir. Bunu tabloya ve metne açıkça yazın. Ayrıca hls4ml satırı ekleyin (M10).
-
-Tablo 1'e ayrıca şu sütunlar eklenmeli: **Precision (bit)**, **Model değiştirmek için yeniden sentez gerekir mi**, **Throughput (inf/s)** — böylece karşılaştırma anlamlı olur.
+- 192 DSP = `PARALLEL_NEURONS(3) × MAX_INPUTS(64)` ✔
+- 98.5 BRAM ≈ 192 RAMB18 / 2 + bias ✔
+- Fmax 127 MHz ↔ WNS 0.118 ns @ 8 ns ✔ (1/(8−0.118) = 126.9)
+- 13 kademe ↔ `valid_pipe(0..12)` ✔
 
 ---
 
-## MINOR — Düzeltilmesi gereken ama ret sebebi olmayan
+## 3. Üç Yol
 
-### m1. Şablon kalıntıları hâlâ metinde
+### Yol A — Donanım makalesine daralt *(kısıtınıza uyan, önerilen)*
 
-- Bölüm 4.1: *"values known from the model study are filled, **the rest are to be completed**."* — Bu cümle gönderilecek metinde olamaz. Kaldırın.
-- `main.tex:4-6` yorumları: *"DRAFT v1"*, *"TBD = data not yet available; to be filled by the authors."*
-- `\todo{}` ve `\writinggap{}` komutları tanımlı; Acknowledgments bölümü `\writinggap[1.0cm]` ile boş bırakılmış.
-- `references.bib` içindeki şablon yorumları ("Add your bibliographic entries here", "The Related Work table lists the references to be filled").
+**Maliyet:** 0 kart zamanı, 0 RTL değişikliği, 0 yeniden ölçüm.
 
-### m2. Zynq parça numarası hiçbir yerde yok
+Doğruluk/kuantizasyon iddialarını tamamen çıkarın. Kalan katkı seti hâlâ güçlü:
 
-"Zynq-7000 SoC" 20 farklı parçayı kapsar. Kaynak sayılarından (53,200 LUT / 220 DSP / 140 BRAM) ve XDC dosyasından bunun **XC7Z020-1CLG484 / Digilent ZedBoard** olduğu anlaşılıyor. Speed grade ile birlikte açıkça yazın — timing closure iddiası speed grade olmadan doğrulanamaz.
+1. Sub-µs, belirlenimli çıkarım çekirdeği — mimariden türetilmiş analitik modelle **ve** osiloskopla doğrulanmış
+2. Yeniden sentez gerektirmeden dört farklı topoloji çalıştırabilen çalışma-anı yapılandırılabilir framework
+3. 1M paket üzerinden aşama bazlı, yeniden üretilebilir uçtan uca gecikme dökümü
+4. Düşük maliyetli SoC'de tam sistem entegrasyonu (Ethernet → PS → DMA → PL → karar)
 
-### m3. PS'in bare-metal olduğu hiç söylenmemiş
+Başlık ve abstract'tan "accuracy/faithful to the trained model" ifadeleri çıkar; makale "an FPGA inference *datapath* and its latency characterization" olarak konumlanır. `Q8.8` bir tasarım tercihi olarak anlatılır, doğruluk iddiası olmadan.
 
-Vitis projesi `lwip_echo_server` — kartta işletim sistemi yok, raw lwIP + bare-metal. Makale Bölüm 5.4'ü "OS-induced latency" üzerine kuruyor ve okuyucu kartta da bir OS olduğunu sanabilir. **Bu aslında lehinize:** kart tarafında OS jitter'ı yok, tüm jitter host tarafında. Bunu açıkça yazın (lwIP sürümü, raw API mi socket API mi, PS clock 666.67 MHz, cache konfigürasyonu).
+**Risk:** Hakem "ağın doğru çalıştığını nereden biliyoruz?" diye sorabilir. Cevap: D2'deki analitik model + `mlp_tb.vhd` simülasyon doğrulaması (bu şu an makalede hiç anlatılmıyor — eklenmeli). Bu genelde yeterli olur ama Yol B kadar güçlü değil.
 
-### m4. PL saat frekansında belirsizlik
+### Yol B — Yol A + kısa bir tezgâh koşumu *(en iyi maliyet/fayda)*
 
-Block design PS7 konfigürasyonu `PCW_FPGA0_PERIPHERAL_FREQMHZ = 130.000000` istiyor; makale 125 MHz diyor; `mlp_tb.vhd` 10 ns periyot (100 MHz) kullanıyor; block design'daki reset bloğunun adı `rst_ps7_0_100M`. Muhtemelen gerçek FCLK 1000/8 = 125 MHz (130 istenip en yakın elde edilebilir değere yuvarlanmış) ve makale doğru — ama bunu Vivado'nun raporladığı **gerçek** FCLK ile teyit edip makalede belirtin. Osiloskop ölçümlerinin çevrime dönüşümü tamamen buna bağlı.
+**Maliyet:** ~1 saat tezgâh. RTL değişikliği **yok**, yeniden sentez **yok**, yeniden eğitim **yok**, mevcut bitstream ve firmware aynen kullanılır.
 
-### m5. Fmax 127 MHz düşük — kritik yol raporlanmalı
+Yapılacaklar:
+1. Bilinen tek bir `.bin` yükle (hangisi olduğunu not et)
+2. Bilinen tek bir CSV akıt, ~100k paket logla (1M gerekmez)
+3. `python3 quantization_analysis.py --log <yeni> --fixed-log` koş
 
-Tam pipeline'lanmış DSP48E1'ler (A/B reg → M reg → P reg, kodda `in_reg`/`w_reg` → `mult_mreg` → `mult_preg`) -1 speed grade'de 400+ MHz'e çıkabilir. 127 MHz demek, kritik yol DSP'lerde değil demek — muhtemelen 40-bit toplayıcı ağacının ilk kademesi veya `current_inputs` için 64×16 bitlik 2:1 buffer mux'ı. Vivado'nun kritik yol raporunu verin ve neden 125 MHz'de kaldığınızı açıklayın. Bu, "daha yüksek saat = daha düşük gecikme" için doğal bir gelecek çalışma maddesi de sağlar.
+Bu, "1M/100k çıkarım üzerinde donanım, altın yazılım modeliyle bit-birebir doğrulandı" iddiasını geri kazandırır. Bu **doğruluk iddiası değil** — modelin iyi olup olmadığından bağımsız, saf bir donanım-doğruluğu iddiası. Q8.8 hattının hatasız çalıştığını kanıtlar ve hakemin en olası sorusunu kapatır.
 
-### m6. DSP'ler MAC değil, sadece çarpıcı olarak kullanılıyor
+İki küçük ön koşul (host tarafı, kartla ilgisi yok):
+- `hft_engine_linux.cpp`'de cast'e doygunluk ekle (sarmalanma → clamp), böylece emülatör ile host aynı davranır:
+  ```cpp
+  static inline int16_t f2q88(float v){
+      int32_t x = (int32_t)lrintf(v * 256.0f);
+      return (int16_t)(x > 32767 ? 32767 : x < -32768 ? -32768 : x);
+  }
+  ```
+  *(Not: emülatördeki `cpp_float_to_int16` da buna göre güncellenmeli, yoksa bit-exact kalmaz.)*
+- Sınıf permütasyon hatası düzeltilmiş motorla koştuğundan emin ol (`--fixed-log`)
 
-Makale "192 parallel DSP-based **MAC** units" diyor. Kodda DSP48E1'in akümülatörü kullanılmıyor; toplama 64→1 LUT tabanlı bir toplayıcı ağacında yapılıyor (Stage 5-10). Donanım hakemi bunu yakalar. "192 DSP-based multipliers followed by a fabric adder tree" daha doğru — ve 14.5K LUT kullanımını da açıklar.
+### Yol C — Tam düzeltme *(en güçlü makale, en çok iş)*
 
-### m7. `convert.py` çalışmıyor ve akışla tutarsız
+Yol B + normalizasyon ekle + yeniden eğit + yeniden akıt. Ancak o zaman Tablo 6/7 ve Bölüm 5.2 gerçek olur.
 
-- Sabit kodlanmış Windows yolları: `r"d:\vivado projects\hft\..."` → yeniden üretilemez.
-- Girdi dosyası `weight_rom.vhd` ve çıktı `weights_pkg.vhd` **depoda yok**.
-- Ürettiği şey bir **derleme-zamanı VHDL paketi** — yani yeniden sentez gerektirir. Bu, makalenin "no re-synthesis" iddiasıyla ve fiilen kullanılan runtime AXI-Lite yükleme yoluyla (`mlp_weight_loader.h`) çelişiyor. Muhtemelen eski bir akış artığı.
+**Gerekli:** `data_prep_binance.py`'de normalizasyonu aç ve scaler'ı diske kaydet (eğitimde ve çıkarımda **aynı** scaler); ham fiyat yerine log-getiri + normalize hacim kullan; yeniden eğit; `.bin`'i yeniden üret ve hiçbir ağırlığın ±0.25'te olmadığını doğrula; yeniden akıt.
 
-Makale Tablo 4'te "Deployment flow: Automatic weight/bias memory regeneration" diyor ama bu akışın gerçek uygulaması depoda yok. Gerçek akışı (PyTorch → .bin → GUI → UDP → PS → AXI-Lite → BRAM) belgeleyin ve `convert.py`'ı ya güncelleyin ya kaldırın.
+**Ek olarak gereken (K5):** Doğruluk iddiası yapacaksanız veri kümesi bölümü de şart — sınıf dağılımı, çoğunluk-sınıfı taban çizgisi, karışıklık matrisi, etiketleme eşiği (`t00005` = 0.00005 görünüyor), eğitim/test bölünmesi. %61.74, taban çizgisi verilmeden anlamsız.
 
-### m8. Simülasyon/doğrulama metodolojisi makalede yok
-
-`mlp_tb.vhd` (148 satır) var ama makale hiç bahsetmiyor. RTL'in nasıl doğrulandığı (kaç test vektörü, altın referansa karşı bit-exact mi, kapsam) bir "Verification" alt bölümünde anlatılmalı. M1'in cevabı da büyük olasılıkla buradan çıkar.
-
-### m9. Robustluk sorunları (bir "trading" sistemi için önemli)
-
-`main.c`'de:
-- `XAxiDma_SimpleTransfer` başarısız olursa (`status != XST_SUCCESS`) kod yine de `while ((mlp_read_reg(0x04) & 0x01) == 0)` döngüsüne giriyor → **sonsuz kilitlenme**. Timeout yok.
-- `memcpy(inputs, payload + 4, 128)` doğrudan `p->payload` üzerinden; parçalanmış pbuf zincirinde `pbuf_copy_partial` kullanılmalı (kodda 111. satırda büyük paketlerin bölündüğü zaten not edilmiş).
-- Paket doğrulama yok (sıra numarası, sağlama, tekrar tespiti).
-
-Makale gecikme belirlenimciliği iddiasında bulunuyorsa, hata yollarının belirlenimliliği de ele alınmalı. En azından bir "Limitations" paragrafında belirtin.
-
-### m10. AXI-Lite done-polling maliyeti gecikme atfını bozuyor
-
-Tablo 10 "AXI-Stream receive + MLP core (PL) = 1.46 µs" diyor ve parantezde "core 768 ns" ekliyor. Kalan ~690 ns'nin ne olduğu söylenmiyor: bu, stream FSM'in ikişer çevrimde bir kelime alması (32 kelime × 2 çevrim = 512 ns, `mlp_axi_wrapper.vhd` ST_RCV_EVEN/ODD döngüsü) **artı** PS'in `mlp_read_reg(0x04)` ile yaptığı AXI-Lite yoklamasının granülaritesidir. Bunu ayrıştırıp yazın — çünkü stream'in 2 çevrimde 1 kelime alması düzeltilebilir bir tasarım kaybıdır (tek çevrimde alınabilir) ve iyi bir gelecek-çalışma maddesidir.
-
-### m11. Sonuçlarda istatistiksel titizlik yok
-
-Hiçbir yerde güven aralığı, tekrar sayısı, ya da koşumlar arası değişkenlik yok. Beş model için tek seed mi, beş seed mi belli değil. Doğruluk farkları (0.0164–0.2174 puan) çok küçük; bunların gürültüden ayırt edilebilir olduğunu göstermek için tekrarlı eğitim ve standart sapma gerekiyor.
-
-### m12. Yazım / biçim
-
-- **Yazar bloğu elsarticle formatında değil.** `\author{}` içine `\centering` ve `tabular` gömülmüş, "Advisor" etiketi manuel. Elsevier `\author[label]{Name}` + `\address[label]{}` + `\corref` yapısını ister. Mevcut haliyle üretim aşamasında geri döner. Ayrıca danışman muhtemelen yazar listesinde olmalı, ayrı bir "Advisor" satırı olarak değil.
-- **E-posta muhtemelen hatalı:** `ahmet.ozakner@bilgiedu.net` — soyadı "Özkaner" ise `ozkaner` olmalı. Kontrol edin.
-- `\renewcommand{\bfdefault}{\mddefault}` tüm kalın yazıyı devre dışı bırakıyor. Elsevier stilinin başlık/tablo tipografisini bozar; kaldırın.
-- Her yerde `[H]` float konumlandırması kullanılmış; Elsevier `[t]`/`[htbp]` tercih eder ve iki sütunlu düzende `[H]` kötü sayfa kırılmaları üretir.
-- **Vivado ekran görüntüleri figür olarak kabul edilmez.** `util_table.jpeg`, `power_onchip.jpeg`, `timing_setup.jpeg`, `model_comparison.jpeg` — hepsi araç ekran görüntüsü. JSA bunları vektör grafik veya tablo olarak yeniden çizmenizi isteyecektir. Ayrıca Tablo 12 ile Şekil 11 (util_table) **aynı veriyi iki kez** veriyor; birini silin. Aynı şey Tablo 6/Şekil 6 ve Tablo 13/Şekil 8 için de geçerli.
-- Şekil 5 (host GUI) ekran görüntüsü olarak kalabilir ama araç sürümü/ölçek bilgisi eklenmeli.
-- Abstract'ta "$\approx$0.2\%" deniyor; Tablo 7'de en büyük fark 0.2174 **yüzde puanı**. "percentage point" ile "percent" ayrımını her yerde netleştirin.
-
-### m13. Reproducibility beyanı yok
-
-JSA giderek kod/veri erişilebilirliği bekliyor. VHDL, Vitis firmware, host GUI ve dönüştürme betikleri elinizde — bir "Code and Data Availability" bölümü ile GitHub/Zenodo DOI'si ekleyin. Bu, M1/M9'daki güven sorunlarını da kısmen telafi eder.
-
-### m14. Ünvan/etik notları
-
-- Anahtar kelimeler iyi; ancak "Framework" iddiası M11'de daraltıldıktan sonra başlıktaki "Customizable ... Framework" ifadesinin hâlâ savunulabilir olduğundan emin olun.
-- HFT bağlamında finansal tavsiye/performans iması yapmayın; makale şu an bunu yapmıyor, iyi. Ancak M9'da bir P&L metriği eklerseniz, backtest sınırlamalarını (slippage, transaction cost, look-ahead bias) mutlaka belirtin.
+**Eksik:** Eğitim betiği hiçbir klasörde yok. Bulunmadan bu yol başlatılamaz.
 
 ---
 
-## Öncelik Sırası (yazar için eylem planı)
+## 4. Yol A/B İçin Yapılacaklar — kart gerektirmeyen düzeltmeler
 
-**Blocker — bunlar olmadan göndermeyin:**
+Aşağıdakilerin hepsi masa başı. Sıra, etki/efor oranına göre.
 
-1. **M10** — Kaynakçayı 25-35'e çıkarın, hls4ml'i mutlaka ekleyin ve karşılaştırın.
-2. **M9** — Veri kümesi + taban çizgisi + karışıklık matrisi bölümü yazın.
-3. **M1** — `float_to_q88`'i round'a çevirin, ölçümü tekrarlayın, %96.85'i açıklayın.
-4. **M2, M3, M11** — Metin-kod çelişkilerini giderin (argmax, feature prep, runtime weight loading, "no re-synthesis").
-5. **m1** — Tüm şablon kalıntılarını temizleyin.
+### Öncelik 1 — Bloker
 
-**Yüksek etki, orta efor:**
+**Y1. Kaynakça: 3 → 25-35.** `references.bib` hâlâ şablon yorumları taşıyor. Elsevier Q1'de 3 kaynaklı Related Work editör masasında elenir.
 
-6. **M8** — README'deki 56 µs seri FSM taban çizgisini + PS Cortex-A9 yazılım çıkarımını ekleyin. Bu tek başına makalenin en güçlü sonucu olur (73×).
-7. **M12** — Analitik çevrim modelini (`ceil(N/3) + 14`) makaleye koyun; 768/758 açıklamasını düzeltin; XDC-makale tutarsızlığını giderin.
-8. **M13, M14** — Throughput/GOP-s ve BRAM organizasyonu analizini ekleyin.
-9. **M4, M5, M6, M7** — Ölçüm metodolojisini temizleyin ve tek bir referans koşum tanımlayın.
+Kapsanması gerekenler: FPGA finansal hızlandırma (Lockwood/NetFPGA, Leber-Geib-Litz, Morris, Denholm); sabit noktalı NN çıkarımı (Jacob ve ark., Gholami survey); FPGA NN framework'leri — **özellikle hls4ml (Duarte ve ark. 2018, JINST)**, FINN-R, Vitis-AI, Angel-Eye; Zynq AXI-DMA gecikme çalışmaları; kernel bypass / OS jitter (DPDK, Onload); limit order book tahmini (DeepLOB, FI-2010).
 
-**Cila:**
+hls4ml'i atlamayın — doğrudan sizin sub-µs MLP nişinizde. Farkınız net: hls4ml her model için yeniden sentez ister, sizinki ağırlıkları ve topolojiyi çalışma anında değiştirir (K4).
 
-10. **M15, M16, m2-m14** — Güç etiketi, Tablo 1'in yeniden kurgusu, parça numarası, elsarticle formatı, figürlerin yeniden çizimi, availability beyanı.
+**Y2. Metin-kod çelişkileri.**
+
+| Nerede | Makale diyor | Gerçek |
+|---|---|---|
+| Tablo 5, Böl. 3 | Argmax → PL (hardware) | `main.c:177-189` — **PS yazılımında**. Üstelik bu, Tablo 10'daki 0.96 µs "readout" kaleminin ta kendisi |
+| Abstract, Böl. 3.1, Tablo 5 | PS "feature preparation" yapar | Sadece `memcpy(inputs, payload+4, 128)`. Öznitelik üretimi, kuantizasyon ve dolgu host'ta |
+| Sonuç | *"Future work includes runtime weight loading"* | **Zaten uygulanmış** — `mlp_weight_loader.h`, RTL'de `w_wr_en` yolu, GUI'de model yükleme paneli |
+| Böl. 5.9 | *"any model that fits the 192-DSP budget, without re-synthesis"* | Gerçek sınır: ≤4 katman, her katman ≤64 nöron ve ≤64 giriş (`framework_pkg.vhd` derleme-zamanı sabitleri) |
+| Böl. 5.9 | Beş model aynı topoloji, sadece ağırlıklar farklı | Topolojiler de farklı (K4) — bu daha güçlü bir sonuç |
+
+**Y3. Şablon kalıntıları.** Böl. 4.1'deki *"the rest are to be completed"*; `main.tex:4-6`'daki "DRAFT v1 / TBD"; `\todo{}` ve `\writinggap{}`; boş Acknowledgments; `references.bib` yorumları.
+
+### Öncelik 2 — Yüksek etki
+
+**Y4. Analitik çevrim modelini ekle (D2).** `cycles = ceil(N_out/3) + 14` formülünü ve tabloyu koyun. Ayrıca:
+- Makale çevrim başına **3 nöron** işlendiğini hiç söylemiyor — bu olmadan Tablo 13 havadan gelmiş görünüyor
+- **768 vs 758 ns açıklaması yanlış:** makale farkı "input-streaming and output-decision" diye açıklıyor. `dbg_data_in_pulse` motor ST_IDLE'da `start='1'` gördüğünde atılıyor, yani **akış zaten bitmişken** — 768 ns içinde streaming yok. Fark 1 çevrim (8 ns) + osiloskop yuvarlaması (118 vs 120 ns)
+- Tablo 13'ün "Measured Cycles" sütunu ölçülmemiş, süre×125 MHz ile türetilmiş → başlığı düzeltin
+- `zedboard_mlp.xdc:65-70` makaleyle çelişiyor (92/35/24/19/14 çevrim diyor). Analitik model makaleyi destekliyor; XDC yorumunu düzeltin
+- Boru hattı her katmanda tamamen boşaltılıyor (95 çevrimin ~52'si drain). Bunu dürüstçe tartışın ve nedenini açıklayın (ping-pong bağımlılığı)
+
+**Y5. README'deki 56 µs taban çizgisini ekle.** *"Original Sequential FSM Latency: ~56 µs over AXI-Lite"* → paralel pipeline 0.768 µs = **73×**. Aynı takım, aynı kart, aynı model. Sahip olduğunuz en adil ve en güçlü karşılaştırma ve makalede yok. (İdealde PS Cortex-A9 üzerinde aynı MLP'nin yazılım süresi de eklenmeli — ama bu ek ölçüm gerektirir, Yol A'da atlanabilir.)
+
+**Y6. Throughput / verimlilik ekle.** Makale hiç GOP/s ya da çıkarım/s vermiyor ama Tablo 1'de FINN'i "12.3 M cls/s", SparkNoC'u "337.2 GOP/s" ile listeliyor. Mevcut sayılardan hesaplanabilir:
+
+- Tepe: 192 × 2 × 125 MHz = **48 GOP/s**
+- Faydalı MAC/çıkarım: 40·64 + 64·32 + 32·16 + 16·3 = **5,168**
+- Yayınlanan çarpma (dolgu dahil): 7,680 → dolgu verimliliği **%67**
+- Ulaşılan: 5,168 × 2 / 768 ns ≈ **13.5 GOP/s** = tepenin **%28'i**
+- Çekirdek throughput: **1.30 M çıkarım/s**; sistem (wrapper `ST_WAIT` nedeniyle örtüşme yok): **~0.77 M/s**
+
+%28 verim, "fully unrolled/parallel" retoriğiyle çelişiyor — drain + dolgu kaynaklı. Sayıyı verin ve açıklayın; hakem zaten hesaplayacak.
+
+**Y7. BRAM analizini düzeltin.** Makale: *"BRAM 70.36%, leaving room for larger feature sets."* Gerçek: `gen_w_brams` her (nöron-slotu × giriş) için ayrı BRAM üretiyor (192 adet), her biri 128×16 bit = bir RAMB18'in **~%12'si**. Derinlik neredeyse bedava; BRAM **sayısı** `PARALLEL_NEURONS × MAX_INPUTS`'e kilitli. Yani gerçek ölçeklenme sınırı DSP (%87) değil, BRAM blok sayısı — makale tersini ima ediyor. Bir çözüm de önerin (birden fazla girişi tek satırda paketlemek).
+
+**Y8. Tablo 1'i yeniden kurun.** Şu an FINN **0.31 µs** gösteriyor, sizinki "sub-µs" — yani FINN daha hızlı ve bu tabloda görünüyor, hiç tartışılmıyor. Doğru çerçeve: FINN binarize ağlar için, her model için yeniden sentez, Ethernet yok; sizinki 16-bit, yeniden sentezsiz topoloji değişimi, ağ bağlantılı. Eklenmesi gereken sütunlar: **Precision (bit)**, **Model değişimi için yeniden sentez?**, **Throughput**. hls4ml satırı ekleyin.
+
+### Öncelik 3 — Cila
+
+**Y9.** Güç değerine "estimated" ekleyin (Vivado tahmini, ölçüm değil; vectorless mi SAIF mi belirtin). Tablo 14'te 2.78 W (PS7'nin 1.535 W'ı dahil) SparkNoC'un "compute power" 7.6 W'ıyla karşılaştırılıyor — farklı tabanlar; PL-only (~1.25 W) kullanın.
+
+**Y10.** Zynq parça numarası hiçbir yerde yok. Kaynaklardan ve XDC'den **XC7Z020-1CLG484 / Digilent ZedBoard**. Speed grade ile yazın — timing closure iddiası onsuz doğrulanamaz.
+
+**Y11.** PS'in **bare-metal** olduğu (lwIP, OS yok) hiç söylenmemiş. Bu lehinize: kart tarafında OS jitter'ı yok, tüm jitter host tarafında. Açıkça yazın (lwIP sürümü, raw/socket API, PS 666.67 MHz, cache konfigürasyonu).
+
+**Y12.** Saat frekansı belirsizliği: BD `PCW_FPGA0_PERIPHERAL_FREQMHZ = 130`, makale 125 MHz, `mlp_tb.vhd` 100 MHz, reset bloğu adı `rst_ps7_0_100M`. Muhtemelen gerçek FCLK = 1000/8 = 125 MHz ve makale doğru — ama Vivado'nun raporladığı gerçek değerle teyit edip yazın. Tüm çevrim dönüşümleri buna bağlı.
+
+**Y13.** Fmax 127 MHz düşük. Tam pipeline'lı DSP48E1 (`in_reg`/`w_reg` → `mult_mreg` → `mult_preg`) çok daha hızlı olabilirdi; kritik yol muhtemelen 40-bit toplayıcı ağacı veya `current_inputs`'un 64×16 bit 2:1 mux'ı. Vivado kritik yol raporunu verin — doğal bir gelecek-çalışma maddesi.
+
+**Y14.** "192 DSP-based **MAC** units" yanlış: DSP48E1'in akümülatörü kullanılmıyor, toplama LUT tabanlı ağaçta (Stage 5-10). "192 DSP multipliers followed by a fabric adder tree" doğru — 14.5K LUT kullanımını da açıklar.
+
+**Y15.** `mlp_tb.vhd` (148 satır) var ama makale hiç bahsetmiyor. Yol A'da bu **kritik** — fonksiyonel doğruluğun tek kanıtı olacak. Bir "Verification" alt bölümü yazın: kaç test vektörü, altın referansa karşı bit-exact mi, kapsam.
+
+**Y16. Biçim.**
+- Yazar bloğu elsarticle formatında değil (`\author{}` içine `tabular` gömülmüş, "Advisor" manuel). Elsevier `\author[label]{}` + `\address[label]{}` yapısını ister. Danışman muhtemelen yazar listesinde olmalı.
+- E-posta muhtemelen hatalı: `ahmet.ozakner@` → soyadı Özkaner ise `ozkaner@`
+- `\renewcommand{\bfdefault}{\mddefault}` tüm kalın yazıyı kapatıyor → kaldırın
+- Her yerde `[H]`; Elsevier iki sütunda `[t]`/`[htbp]` tercih eder
+- **Vivado ekran görüntüleri figür olarak kabul edilmez:** `util_table.jpeg`, `power_onchip.jpeg`, `timing_setup.jpeg`, `model_comparison.jpeg` → tablo/vektör grafik olarak yeniden çizin. Ayrıca Tablo 12 ↔ Şekil 11, Tablo 6 ↔ Şekil 6, Tablo 13 ↔ Şekil 8 **aynı veriyi iki kez** veriyor; birer tanesini silin
+- "percentage point" ile "percent" ayrımını netleştirin (abstract "≈0.2%", Tablo 7 "0.2174 puan")
+
+**Y17.** Reproducibility beyanı yok. VHDL, firmware, host araçları elinizde — "Code and Data Availability" bölümü + GitHub/Zenodo DOI ekleyin.
+
+**Y18. Robustluk (Limitations paragrafı).** `main.c`'de: DMA başarısız olursa (`status != XST_SUCCESS`) kod yine de done-polling döngüsüne giriyor → **sonsuz kilitlenme**, timeout yok. `memcpy` doğrudan `p->payload` üzerinden (parçalanmış pbuf için `pbuf_copy_partial` gerekir). Paket doğrulama yok (sıra no, sağlama). Gecikme belirlenimliliği iddiası varsa hata yollarının belirlenimliliği de ele alınmalı.
 
 ---
 
-## Kapanış Notu
+## 5. Kaldırılan / Geri Çekilen Maddeler (v1)
 
-Makalenin çekirdeği gerçek ve savunulabilir: 40-64-32-16-3 bir MLP'yi 96 çevrimde, ölçülmüş 768 ns'de, ~1.25 W PL gücüyle, 200 dolarlık bir kartta çalıştırıyorsunuz — ve bunu osiloskopla, analitik modelle birebir uyuşan biçimde kanıtlıyorsunuz. Bu iyi bir sonuç.
+| v1 maddesi | Durum |
+|---|---|
+| M1 — `float_to_q88` yuvarlama hatası | **Geri çekildi.** Python emülatörü firmware'in budamasını bilerek taklit ediyor; ikisi tutarlı. Gerçek kök neden K1. |
+| M7 — p99'ların toplanması | **Geri çekildi.** Ham logdan doğrulandı: Tablo 10 p99'u paket bazında doğru hesaplanmış. |
+| M1-alt — sequence number hipotezi | **Geri çekildi.** Uyuşmazlık hizalama kaynaklı değil; log ile ağırlık dosyası eşleşmiyor (K2). |
 
-Sorun sunumda: makale, **kanıtlayabildiğinden fazlasını iddia ediyor** (argmax donanımda, PS öznitelik hazırlıyor, yeniden sentez gerekmez, "any model") ve **kanıtlayabildiği bazı şeyleri iddia etmiyor** (73× seri-FSM hızlanması, runtime ağırlık yükleme, analitik gecikme modeli, bit-exact doğrulama potansiyeli). İddiaları koda hizalayın ve eksik bilimsel çerçeveyi (literatür, veri kümesi, taban çizgi) tamamlayın — o zaman bu makale JSA'da yayınlanabilir bir çalışma olur.
+---
+
+## 6. Kapanış
+
+Elinizde iki ayrı makale var. Donanım makalesi **hazır ve sağlam** — ölçümleri bağımsız olarak yeniden ürettim, analitik model ölçümle birebir tutuyor, ve şu an makalenin anlatmadığı gerçek katkılar (73× seri-FSM hızlanması, çalışma-anı topoloji değişimi, mimariden türeyen gecikme modeli) var. ML makalesi ise henüz yok; öznitelik boru hattı düzeltilip yeniden eğitilmeden yazılamaz.
+
+Kısıtınız göz önüne alındığında: **Yol A veya B'yi seçin, Bölüm 4'teki Y1-Y18'i uygulayın, doğruluk iddialarını Yol C'ye erteleyin.** Makale bu şekilde JSA'ya gidebilir ve ML tarafı ikinci bir çalışmaya kalır.
