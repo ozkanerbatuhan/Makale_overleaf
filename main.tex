@@ -54,8 +54,8 @@
 % TITLE
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \title{
-An Ethernet-Enabled Customizable Neural Inference Framework
-on Low-Cost FPGA SoC for High-Frequency Trading
+A Run-Time Reconfigurable Neural Inference Engine with
+Deterministic Sub-Microsecond Latency on a Low-Cost FPGA SoC
 }
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -83,25 +83,28 @@ Istanbul Bilgi University, Istanbul, T\"urkiye}
 % ABSTRACT
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{abstract}
-High-frequency trading requires not only accurate decisions but predictable,
-ultra-low latency, which general-purpose CPUs cannot guarantee under scheduling
-and memory-hierarchy jitter. This work presents an Ethernet-enabled,
-\emph{customizable} neural-inference framework embedded entirely in the
-programmable logic of a low-cost Xilinx Zynq-7000 SoC. The processing system
-handles packet reception and control; a hardware multi-layer perceptron
-(40-64-32-16-3) performs inference in the fabric. Feature vectors are streamed
-over AXI-DMA / AXI-Stream and the model is deployed in $Q8.8$ fixed point, so a
-Python-trained network is re-embedded without redesigning the datapath. The
-design uses \SI{87.3}{\percent} of the DSP slices and \SI{27.2}{\percent} of the
-LUTs at an estimated \SI{2.72}{\watt}, closes timing at \SI{125}{\mega\hertz},
-and completes an inference in \SI{768}{\nano\second}. A cycle counter read back
-after every inference shows this latency to be invariant: over \num{100000}
-inferences the standard deviation is zero. The same network run bare-metal on
-the SoC's own Cortex-A9 at \texttt{-O3} requires \SI{52.4}{\micro\second}, so
-the fabric path is 68 times faster and, unlike the processor, has no spread at
-all. Because the feature set, network shape, fixed-point format and decision
-classes are configurable, the system is a reusable FPGA-embedded inference
-framework, demonstrated on an HFT decision task.
+Deploying neural inference on an embedded system-on-chip forces a choice
+between two costs. Running the network on the processor is flexible but leaves
+latency at the mercy of scheduling, cache behavior and the depth of the software
+stack; moving it into programmable logic makes latency predictable but normally
+ties the bitstream to one network, so every retrained model costs a synthesis
+run. This paper presents an inference engine that avoids both. The network
+shape is a run-time parameter held in configuration registers rather than an
+elaboration-time constant, so networks of different topologies are deployed into
+an unchanged bitstream over AXI-Lite with no synthesis step. On a low-cost
+Xilinx Zynq-7000 the engine uses \SI{87.3}{\percent} of the DSP slices and
+\SI{27.2}{\percent} of the LUTs at an estimated \SI{2.72}{\watt}, closes timing
+at \SI{125}{\mega\hertz}, and completes an inference in
+\SI{768}{\nano\second}. An on-chip cycle counter read back after every inference
+shows this latency to be invariant: over \num{100000} inferences the standard
+deviation is zero. The same network run bare-metal on the SoC's own Cortex-A9 at
+\texttt{-O3} requires \SI{52.4}{\micro\second}, so the fabric path is 68 times
+faster and, unlike the processor, has no spread at all. Correctness is
+established rather than assumed: the datapath was verified bit-exactly against
+an independent reference model over \num{400000} inferences across four
+topologies, a process that first exposed three pipeline-alignment defects
+invisible to synthesis. The engine is evaluated end to end over Ethernet on a
+latency-critical financial decision task.
 \end{abstract}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -109,11 +112,11 @@ framework, demonstrated on an HFT decision task.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % JSA'da tipik olarak 5 anahtar kelime kullaniliyor.
 \begin{keyword}
+Embedded systems \sep
 FPGA \sep
+Run-time reconfiguration \sep
 Neural network inference \sep
-Low-latency systems \sep
-Fixed-point arithmetic \sep
-High-frequency trading
+Deterministic latency
 \end{keyword}
 
 \end{frontmatter}
@@ -121,34 +124,41 @@ High-frequency trading
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Introduction}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-In high-frequency trading, the value of a decision decays within microseconds,
-so the time between the arrival of market data and the emission of a trading
-action is as important as the correctness of the action itself. That this
-competition is economically consequential rather than merely technical has been
-argued at length: Budish et al.~\cite{Budish2015} model the resulting
-latency race as an equilibrium feature of continuous limit order books, and
-Aquilina et al.~\cite{Aquilina2022} quantify its cost from exchange message
-data, finding races decided on the scale of microseconds. CPU- and
-GPU-based pipelines insert several sources of non-deterministic delay between
-these two events: operating-system scheduling and interrupts, cache and memory
-hierarchy behavior, and the depth of the software stack. The result is not
-only higher mean latency but also a heavy-tailed distribution (jitter) that is
-unacceptable when worst-case response time must be bounded.
+Embedded systems increasingly need to evaluate a small neural network on every
+input event, under a latency bound that must hold for the worst case rather than
+on average. The usual options each give up something. Running the network on the
+embedded processor keeps the model easy to change but leaves latency exposed to
+scheduling, interrupt handling, cache behavior and the depth of the software
+stack, so the distribution acquires a heavy tail even when the mean is
+acceptable. Moving the network into programmable logic removes those sources of
+variation, but the standard route through high-level synthesis binds the
+bitstream to one network: a retrained model, or a change of topology, costs a
+synthesis and place-and-route run measured in hours.
 
-This paper argues that the inference itself should be moved off the processor
-and into the FPGA fabric, where the datapath is deterministic and the
-worst-case latency is governed by a fixed pipeline rather than by the operating
-system. We present a neural-inference engine that runs \emph{inside} the
-programmable logic of a low-cost Zynq-7000 SoC, fed over Ethernet through the
-processing system and an AXI-DMA / AXI-Stream datapath. Crucially, the engine
-is not tied to one trained model: the input features, the MLP topology, the
-fixed-point format, and the output decision classes are all user-configurable,
-making the system a reusable FPGA-embedded AI framework rather than a single
-fixed accelerator. The framework is validated on a three-class directional
-decision task over Binance BTCUSDT trade data, specified in
-Section~\ref{sec:dataset}.
+This paper presents an inference engine that keeps the determinism of the
+fabric without inheriting that rigidity. The engine runs \emph{inside} the
+programmable logic of a low-cost Zynq-7000 SoC, is fed over Ethernet through the
+processing system and an AXI-DMA / AXI-Stream datapath, and treats the network
+shape as a run-time parameter: layer widths live in configuration registers, so
+networks of different topologies are loaded into an unchanged bitstream over
+AXI-Lite with no synthesis step between them. The input feature set, the
+fixed-point format and the number of decision classes are configurable on the
+same terms, which makes the design a reusable embedded inference engine rather
+than one fixed accelerator.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+We evaluate it on a task that makes the latency requirement concrete. In
+high-frequency trading the time between the arrival of market data and the
+emission of an order is as important as the correctness of the order itself, and
+the competition is economically consequential rather than merely technical:
+Budish et al.~\cite{Budish2015} model the resulting latency race as an
+equilibrium feature of continuous limit order books, and Aquilina et
+al.~\cite{Aquilina2022} quantify its cost from exchange message data, finding
+races decided on the scale of microseconds. The workload used throughout is a
+three-class directional decision over Binance BTCUSDT trade data, specified in
+Section~\ref{sec:dataset}. Nothing in the architecture is specific to it; the
+task supplies a realistic input rate, a realistic network size and a worst-case
+requirement that a mean latency figure would not capture.
+
 \subsection{Main Contributions}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 The main contributions of this work are:
