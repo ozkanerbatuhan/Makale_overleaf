@@ -212,8 +212,13 @@ through a high-level synthesis flow, reporting roughly \SI{500}{\nano\second} pe
 order against approximately \SI{1}{\micro\second} for the equivalent software,
 and Brown et al.~\cite{Brown2021} applied dataflow transformations to a
 credit-default-swap pricing engine on a data-center accelerator card.
+LightTrader~\cite{Yoo2023} is the closest system in intent, since it places a
+learned model inside the trading loop: an FPGA handles the network and order
+path, while the inference itself runs on dedicated deep-learning accelerator
+chips, and a scheduler trades model size against the time remaining before a
+deadline.
 
-What these designs share is that the accelerated function is fixed at
+What the fabric-resident designs share is that the accelerated function is fixed at
 elaboration time. A feed handler, an order book, a pricing kernel or a
 rule-based strategy is compiled into the fabric; changing the strategy means
 changing the bitstream. This is appropriate when the algorithm is stable, but it
@@ -232,7 +237,15 @@ quantized networks, reaching classification latencies of a few hundred
 nanoseconds; and hls4ml~\cite{Duarte2018} targets the same sub-microsecond
 regime for the trigger systems of particle-physics experiments, which resemble
 the trading problem in that a decision must be produced within a hard latency
-budget. SparkNoC~\cite{sparknoc} and comparable edge accelerators optimize
+budget. hls4ml has since matured into a general compiler platform with several
+model front ends and hardware back ends~\cite{Schulte2026}, and
+da4ml~\cite{Sun2026} replaces its fully unrolled constant matrix-vector
+products with distributed arithmetic, cutting on-chip resources by up to a third
+while also reducing latency. Both gain their efficiency from the same source:
+the weights are constants of the circuit. The same low-cost XC7Z020 used here
+has also been targeted through Vitis HLS for latency-bound signal processing,
+meeting a \SI{70}{\micro\second} worst-case detection budget for LTE-A cognitive
+radio~\cite{deBroglie2024}. SparkNoC~\cite{sparknoc} and comparable edge accelerators optimize
 energy efficiency for convolutional workloads, while
 Tsoutsouras et al.~\cite{Tsoutsouras2017} show the same
 exploration methodology applied to a non-neural classifier on a Zynq SoC;
@@ -246,8 +259,10 @@ Section~\ref{sec:eval} reproduces for the present design.
 The arithmetic these designs rely on is well understood. Fixed-point and
 integer-only inference has been shown to preserve accuracy for a wide range of
 networks~\cite{Jacob2018,Hubara2017}, and the trade-offs are surveyed
-comprehensively by Gholami et al.~\cite{Gholami2021}; the $Q8.8$ format adopted
-here sits at the conservative end of that spectrum.
+comprehensively by Gholami et al.~\cite{Gholami2021}; for multi-layer
+perceptrons specifically, the propagation of quantization noise through the
+layers can be predicted analytically~\cite{AlRikabi2024}. The $Q8.8$ format
+adopted here sits at the conservative end of that spectrum.
 
 The common property of this second group is that the network topology is baked
 into the generated hardware. FINN, FINN-R, Angel-Eye and hls4ml all require a
@@ -269,7 +284,21 @@ is compiled to microcode that the overlay executes without reconfiguration.
 Commercial toolchains adopt the same model: the deep-learning processing unit
 shipped by AMD for Zynq and Versal parts~\cite{AMDVitisAI} is a fixed overlay
 driven by compiled instructions, so that a new network is deployed by recompiling its instruction
-stream rather than by re-implementing the device.
+stream rather than by re-implementing the device. The idea has since been
+carried to transformers: the runtime-adaptive accelerator of Kabir et
+al.~\cite{Kabir2026} executes different transformer models through
+software-set parameters without re-synthesis. Ratto et al.~\cite{Ratto2023}
+derive run-time reconfigurable accelerators from an ONNX description, but use
+the reconfigurability to trade execution time for power within one network
+rather than to change the network.
+
+Dynamic partial reconfiguration offers a third mechanism, in which the fabric
+itself is rewritten at run time. Boudjadar et al.~\cite{Boudjadar2025} apply it
+to CNN acceleration on the same XC7Z020 used here, reporting
+\SI{0.68}{\second} per image. Partial reconfiguration avoids a full synthesis
+run at deployment, but each module still has to be synthesized in advance and
+the reconfiguration itself takes the device region out of service, which rules
+it out for changes made while inference is in progress.
 
 The engine described in this paper belongs to this family, and we make no claim
 to have introduced run-time programmability. The distinction lies in the design
@@ -294,7 +323,10 @@ networks comparable in size to the one considered here. Subsequent work in the
 same direction has extended the approach to higher-order functions, by learning
 piecewise polynomials inside each lookup table~\cite{Andronic2023}, and to
 deeper topologies, by hiding a multi-layer sub-network inside a single
-synthesizable Boolean function~\cite{Andronic2024}.
+synthesizable Boolean function~\cite{Andronic2024}. More recent work widens
+the inputs each table can take~\cite{Lou2024}, assembles larger networks from
+LUT-mapped sub-networks~\cite{Andronic2025}, and applies the same mapping to
+gradient-boosted decision trees~\cite{Khataei2025}.
 
 These results are one to two orders of magnitude faster than the
 \SI{768}{\nano\second} reported below, and we state that plainly rather than
@@ -966,7 +998,12 @@ c_\ell \;=\; \left\lceil \frac{n_\ell}{3} \right\rceil + D + 1,
 \label{eq:cycles}
 \end{equation}
 %
-where $D$ is the depth of the token pipeline. Table~\ref{tab:cycle_breakdown}
+where $D$ is the depth of the token pipeline. Analytic latency models of this
+kind are also used to steer design-space exploration for systolic
+accelerators, where they have been validated against FPGA measurements to
+within about one percent~\cite{Gutermann2026}; for a single-issue
+pipeline without data-dependent control the model can be exact.
+Table~\ref{tab:cycle_breakdown}
 compares this prediction with the oscilloscope measurement. The predicted total,
 $\sum_\ell c_\ell = 96$ cycles or \SI{768}{\nano\second}, agrees exactly with
 the measured input-to-done interval. Two of the four individual intervals read
