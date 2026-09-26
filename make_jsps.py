@@ -51,7 +51,7 @@ PREAMBLE = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 A Run-Time Reconfigurable Neural Inference Engine with Deterministic
 Sub-Microsecond Latency on a Low-Cost FPGA SoC}
 
-\author*[1]{\fnm{Ahmet Batuhan} \sur{\"Ozkaner}}\email{ahmet.ozakner@bilgiedu.net}
+\author*[1]{\fnm{Ahmet Batuhan} \sur{\"Ozkaner}}\email{ahmet.ozkaner@bilgiedu.net}
 
 \author[1]{\fnm{Mustafa Alper} \sur{Il{\i}k}}\email{alper.ilik@bilgiedu.net}
 
