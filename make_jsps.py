@@ -27,6 +27,8 @@ PREAMBLE = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \documentclass[pdflatex,sn-mathphys-num]{sn-jnl}
 
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \usepackage{graphicx}
 \usepackage{multirow}
 \usepackage{amsmath,amssymb,amsfonts}
@@ -155,7 +157,34 @@ software, investigation, and review and editing of the manuscript. Baykal
 Sar{\i}o\u{g}lu: supervision and project administration. All authors read and
 approved the final manuscript.
 
+\bmhead{Use of AI tools}
+Large language model based assistants were used as an aid in the literature
+search, in the development of the measurement and verification software, and
+for correcting typographical and language errors in the manuscript. The authors
+reviewed all such output and take full responsibility for the content of this
+article.
+
 \bibliography{references}
+
+%% TASLAK biyografiler: Batuhan dogrulayacak, fotograflar sonra eklenecek.
+\section*{Author Biographies}
+
+\bmhead{Ahmet Batuhan \"Ozkaner}
+received the B.Sc. degree in Electrical and Electronics Engineering from
+\.Istanbul Bilgi University, \.Istanbul, T\"urkiye. He is currently an
+electrical design engineer at R\"onesans Holding. His research interests
+include FPGA-based digital design, hardware acceleration of neural network
+inference, and embedded systems.
+
+\bmhead{Mustafa Alper Il{\i}k}
+is with the Department of Electrical and Electronics Engineering, \.Istanbul
+Bilgi University, \.Istanbul, T\"urkiye. His research interests include
+embedded systems and FPGA-based hardware design.
+
+\bmhead{Baykal Sar{\i}o\u{g}lu}
+is a faculty member in the Department of Electrical and Electronics
+Engineering, \.Istanbul Bilgi University, \.Istanbul, T\"urkiye. His research
+interests include electronic circuits and systems.
 
 \end{document}
 """ % (funding, competing, data)
