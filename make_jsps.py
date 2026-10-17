@@ -25,13 +25,14 @@ PREAMBLE = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Bu dosya make_jsps.py tarafindan ../main.tex'ten uretilir. Govde metnini
 % burada degil ana main.tex'te duzenleyin, sonra script'i yeniden calistirin.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\documentclass[pdflatex,sn-mathphys-num]{sn-jnl}
+\documentclass[pdflatex,sn-mathphys-num,iicol]{sn-jnl}
 
 \usepackage[T1]{fontenc}
-\usepackage{lmodern}
+\setlength{\tabcolsep}{3.5pt}  % iki sutunda tablolar sutuna sigsin
 \usepackage{graphicx}
 \usepackage{multirow}
-\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{amsmath}
+\usepackage{newtxtext,newtxmath}  % Times; amssymb sembolleri newtxmath'te
 \usepackage{xcolor}
 \usepackage{textcomp}
 \usepackage{booktabs}
@@ -103,14 +104,36 @@ def main():
     # Sekiller: figures/x -> x (Springer alt klasor istemiyor)
     body = body.replace("{figures/", "{")
 
-    # sn-jnl tek sutun ve metin genisligi elsarticle 5p'den dar; iki sutuna
-    # yayilan bu tablolar tasiyor (Overfull hbox). Metin genisligine sigdir.
-    for label in ("tab:related_work", "tab:latency_breakdown"):
-        i = body.index(r"\label{" + label + "}")
-        a = body.index(r"\begin{tabular}", i)
+    # sn-jnl iki sutunu (iicol) elsarticle 5p sutunundan dar; tablolar tasiyor
+    # (Overfull hbox). Her tabular'i kendi kutusuna sigdir: table* -> metin
+    # genisligi, table -> sutun genisligi. Dar tablo buyutulmez (max width).
+    out, pos = [], 0
+    for m in re.finditer(r"\\begin\{(table\*?)\}", body):
+        env = m.group(1)
+        end = body.index(r"\end{" + env + "}", m.end())
+        a = body.find(r"\begin{tabular", m.end(), end)
+        if a < 0:
+            continue
         b = body.index(r"\end{tabular}", a) + len(r"\end{tabular}")
-        body = body[:a] + r"\resizebox{\textwidth}{!}{%" + "\n" + \
-            body[a:b] + "}" + body[b:]
+        # sn-jnl'de \caption'dan sonra tabular kutuya alinamiyor (Missing
+        # \endgroup); bu yuzden kutu yerine sabit sutunlari %10 daralt.
+        tab = body[a:b]
+        # Dogrulama tablosu (5 sayisal sutun) sutuna 8 pt tasiyor: bir punto kucult.
+        if r"\label{tab:verification}" in body[m.end():a]:
+            body_pre = body[pos:a].replace(r"\small", r"\footnotesize")
+            out.append(body_pre + tab)
+            pos = b
+            continue
+        # Karsilastirma tablosu iki sutun genisliginde bos kaliyor: sutunlari ac.
+        if r"\label{tab:related_work}" in body[m.end():a]:
+            tab = re.sub(r"([pL])\{([\d.]+)cm\}",
+                         lambda t: "%s{%.2fcm}" % (t.group(1), float(t.group(2)) * 1.2), tab)
+        if env == "table":
+            tab = re.sub(r"([pL])\{([\d.]+)cm\}",
+                         lambda t: "%s{%.2fcm}" % (t.group(1), float(t.group(2)) * 0.9), tab)
+        out.append(body[pos:a] + tab)
+        pos = b
+    body = "".join(out) + body[pos:]
 
     # Mevcut beyanlardan metinleri al
     def section_text(name):

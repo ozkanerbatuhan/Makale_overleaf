@@ -4,13 +4,14 @@
 % Bu dosya make_jsps.py tarafindan ../main.tex'ten uretilir. Govde metnini
 % burada degil ana main.tex'te duzenleyin, sonra script'i yeniden calistirin.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\documentclass[pdflatex,sn-mathphys-num]{sn-jnl}
+\documentclass[pdflatex,sn-mathphys-num,iicol]{sn-jnl}
 
 \usepackage[T1]{fontenc}
-\usepackage{lmodern}
+\setlength{\tabcolsep}{3.5pt}  % iki sutunda tablolar sutuna sigsin
 \usepackage{graphicx}
 \usepackage{multirow}
-\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{amsmath}
+\usepackage{newtxtext,newtxmath}  % Times; amssymb sembolleri newtxmath'te
 \usepackage{xcolor}
 \usepackage{textcomp}
 \usepackage{booktabs}
@@ -366,8 +367,7 @@ between the same two points and are given for orientation rather than as a
 ranking; see the discussion in the text.}
 \label{tab:related_work}
 \small
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}L{2.0cm}L{2.0cm}L{2.4cm}L{1.2cm}ccL{2.4cm}@{}}
+\begin{tabular}{@{}L{2.40cm}L{2.40cm}L{2.88cm}L{1.44cm}ccL{2.88cm}@{}}
 \toprule
 Study & Platform & Function & Precision & Re-synth. & Net.\ I/O & Reported metric \\
 \midrule
@@ -385,7 +385,7 @@ LogicNets~\cite{Umuroglu2020} & Virtex Ultra\-Scale+ & LUT-mapped MLP & 2 to 6\,
 \addlinespace
 This work & Zynq XC7Z020 & MLP, run-time shape & 16\,bit & No & Yes & 768\,ns core, 68.6\,$\mu$s end to end \\
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{table*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -440,7 +440,7 @@ summarizes the configurable components.
 \centering
 \caption{Customization options supported by the proposed framework}
 \label{tab:customization_options}
-\begin{tabular}{p{3.0cm} p{4.4cm}}
+\begin{tabular}{p{2.70cm} p{3.96cm}}
 \toprule
 Component & Customizable Parameters \\
 \midrule
@@ -477,7 +477,7 @@ Section~\ref{sec:verification}.
 \centering
 \caption{Effect of $Q8.8$ quantization on the reference model}
 \label{tab:quantization_eval}
-\begin{tabular}{p{3.1cm} p{4.3cm}}
+\begin{tabular}{p{2.79cm} p{3.87cm}}
 \toprule
 Metric & Value \\
 \midrule
@@ -545,7 +545,7 @@ straightforward extension.
 \centering
 \caption{Hardware/software partitioning of the proposed system}
 \label{tab:hw_sw_partitioning}
-\begin{tabular}{p{2.8cm} p{4.6cm}}
+\begin{tabular}{p{2.52cm} p{4.14cm}}
 \toprule
 Component & Implementation Location \\
 \midrule
@@ -582,7 +582,7 @@ on real silicon rather than estimated (Section~\ref{sec:eval}).
 names carry the prefix \texttt{dbg\_}, omitted here for space.}
 \label{tab:debug_signals}
 \small
-\begin{tabular}{@{}L{2.3cm}L{5.0cm}@{}}
+\begin{tabular}{@{}L{2.07cm}L{4.50cm}@{}}
 \toprule
 Signal & Purpose \\
 \midrule
@@ -642,7 +642,7 @@ instrumented run, since it is the one whose composition is known.
 \centering
 \caption{Experimental setup}
 \label{tab:experimental_setup}
-\begin{tabular}{p{3.1cm} p{4.3cm}}
+\begin{tabular}{p{2.79cm} p{3.87cm}}
 \toprule
 Item & Description \\
 \midrule
@@ -706,7 +706,7 @@ input vectors), whereas the original alignment matched on none.
 \caption{Pipeline-alignment defects found by directed simulation}
 \label{tab:rtl_defects}
 \small
-\begin{tabular}{@{}p{2.0cm}p{1.0cm}p{4.4cm}@{}}
+\begin{tabular}{@{}p{1.80cm}p{0.90cm}p{3.96cm}@{}}
 \toprule
 Signal & Stage & Consequence \\
 \midrule
@@ -764,7 +764,7 @@ inference, i.e.\ 1{,}200{,}000 individual comparisons in total, none of which
 differed. ``Cycles'' is the on-chip counter value, identical on every inference
 of a run and equal to $\sum_\ell \lceil n_\ell/3\rceil + 55$.}
 \label{tab:verification}
-\small
+\footnotesize
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
 Network & Inferences & Decision & Outputs & Cycles \\
@@ -1111,7 +1111,6 @@ are computed over the per-packet sums, not by adding the per-stage percentiles;
 the two differ because a packet slow in one stage is not in general slow in the
 others (adding the per-stage p99 values would give 21.51 rather than 21.03).}
 \label{tab:latency_breakdown}
-\resizebox{\textwidth}{!}{%
 \begin{tabular}{p{4.6cm} p{1.5cm} p{2.4cm} p{4.4cm}}
 \toprule
 Stage & Mean & p50 / p99 & Measurement Method \\
@@ -1125,7 +1124,7 @@ Result readout & 0.96 & 0.96 / 0.97 & AXI-Lite \\
 Board subtotal (PS + PL) & 14.40 & 9.41 / 21.03 & On-board sum \\
 Host end-to-end & 68.56 & 68.50 / 80.92 & Host round trip \\
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{table*}
 
 \begin{table}[htbp]
