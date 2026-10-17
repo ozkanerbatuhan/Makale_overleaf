@@ -29,6 +29,20 @@ PREAMBLE = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \usepackage[T1]{fontenc}
 \setlength{\tabcolsep}{3.5pt}  % iki sutunda tablolar sutuna sigsin
+% Yayimlanmis JSPS gorunumune yakin: basliklar sans kalin ve sola yasli, ozet
+% tam genislik. Yalniz sn-jnl'in font makrolari degisir, yerlesim ayni.
+\usepackage[scaled=0.92]{helvet}
+\makeatletter
+\def\Titlefont{\reset@font\sffamily\fontsize{16bp}{20bp}\bfseries\selectfont\raggedright}%
+\def\Authorfont{\reset@font\sffamily\fontsize{10.5bp}{13bp}\bfseries\selectfont\raggedright}%
+\def\addressfont{\reset@font\fontsize{8.5bp}{10.5bp}\selectfont\raggedright}%
+\def\abstractheadfont{\reset@font\sffamily\fontsize{10bp}{12bp}\bfseries\selectfont\raggedright}%
+\def\abstractfont{\reset@font\fontsize{9.5bp}{11.5bp}\selectfont\leftskip=0pt\rightskip=0pt\parfillskip=0pt plus 1fil}%
+\def\keywordfont{\reset@font\fontsize{9bp}{11bp}\selectfont\leftskip=0pt\rightskip=0pt plus0.5fill}%
+\def\sectionfont{\reset@font\sffamily\fontsize{12bp}{14bp}\bfseries\selectfont\raggedright}%
+\def\subsectionfont{\reset@font\sffamily\fontsize{10.5bp}{12.5bp}\bfseries\selectfont\raggedright}%
+\def\subsubsectionfont{\reset@font\sffamily\fontsize{10bp}{12bp}\bfseries\itshape\selectfont\raggedright}%
+\makeatother
 \usepackage{graphicx}
 \usepackage{multirow}
 \usepackage{amsmath}

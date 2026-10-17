@@ -8,6 +8,20 @@
 
 \usepackage[T1]{fontenc}
 \setlength{\tabcolsep}{3.5pt}  % iki sutunda tablolar sutuna sigsin
+% Yayimlanmis JSPS gorunumune yakin: basliklar sans kalin ve sola yasli, ozet
+% tam genislik. Yalniz sn-jnl'in font makrolari degisir, yerlesim ayni.
+\usepackage[scaled=0.92]{helvet}
+\makeatletter
+\def\Titlefont{\reset@font\sffamily\fontsize{16bp}{20bp}\bfseries\selectfont\raggedright}%
+\def\Authorfont{\reset@font\sffamily\fontsize{10.5bp}{13bp}\bfseries\selectfont\raggedright}%
+\def\addressfont{\reset@font\fontsize{8.5bp}{10.5bp}\selectfont\raggedright}%
+\def\abstractheadfont{\reset@font\sffamily\fontsize{10bp}{12bp}\bfseries\selectfont\raggedright}%
+\def\abstractfont{\reset@font\fontsize{9.5bp}{11.5bp}\selectfont\leftskip=0pt\rightskip=0pt\parfillskip=0pt plus 1fil}%
+\def\keywordfont{\reset@font\fontsize{9bp}{11bp}\selectfont\leftskip=0pt\rightskip=0pt plus0.5fill}%
+\def\sectionfont{\reset@font\sffamily\fontsize{12bp}{14bp}\bfseries\selectfont\raggedright}%
+\def\subsectionfont{\reset@font\sffamily\fontsize{10.5bp}{12.5bp}\bfseries\selectfont\raggedright}%
+\def\subsubsectionfont{\reset@font\sffamily\fontsize{10bp}{12bp}\bfseries\itshape\selectfont\raggedright}%
+\makeatother
 \usepackage{graphicx}
 \usepackage{multirow}
 \usepackage{amsmath}
@@ -218,7 +232,7 @@ On embedded SoC targets the movement of data between the processing system and
 the fabric is frequently the limiting factor rather than the arithmetic itself,
 as quantified for a CNN accelerator by Rios-Navarro et
 al.~\cite{RiosNavarro2018}, an observation that the per-stage breakdown of
-Section~\ref{sec:eval} reproduces for the present design.
+Section~\ref{sec:latency} reproduces for the present design.
 
 The arithmetic these designs rely on is well understood. Fixed-point and
 integer-only inference has been shown to preserve accuracy for a wide range of
@@ -350,7 +364,7 @@ rows is of limited value, since the reported quantities are not measured between
 the same two points: FINN and hls4ml report a compute-kernel latency, whereas the
 figure reported here is the end-to-end path from an Ethernet frame to a decision.
 The core latency of this design is given separately in
-Section~\ref{sec:eval} to make the comparison meaningful.
+Section~\ref{sec:latency} to make the comparison meaningful.
 
 For the compiler-based part of the design space we do not rely on these
 figures alone. Section~\ref{sec:hls4ml} reports a like-for-like implementation
@@ -424,7 +438,7 @@ Feature packets are delivered over Ethernet to the PS, parsed, and forwarded to
 the PL. Each 32-bit AXI-Stream word carries two 16-bit $Q8.8$ values, and the 40
 features, zero-padded to the 64-wide datapath, are transferred as 32 stream
 words on which the engine auto-starts. Every stage of this path is instrumented with PS-side timestamps and quantified
-over a 1{,}004{,}229-packet run in Section~\ref{sec:eval}
+over a 1{,}004{,}229-packet run in Section~\ref{sec:latency}
 (Table~\ref{tab:latency_breakdown}).
 
 
@@ -574,7 +588,7 @@ signals of Table~\ref{tab:debug_signals}. \texttt{dbg\_data\_in\_pulse} marks
 the arrival of a complete feature vector, \texttt{dbg\_layer1\_done} to \texttt{dbg\_layer4\_done} pulse as
 each layer finishes, and \texttt{dbg\_mlp\_busy} brackets the whole inference.
 These pins are probed with an oscilloscope, so the per-layer latency is observed
-on real silicon rather than estimated (Section~\ref{sec:eval}).
+on real silicon rather than estimated (Section~\ref{sec:latency}).
 
 \begin{table}[htbp]
 \centering
@@ -670,7 +684,7 @@ Reporting latency and resource figures for an accelerator is only meaningful if
 the accelerator is first shown to compute the intended function. We therefore
 verify the core at three levels before reporting any performance result.
 
-\paragraph{Golden reference model.}
+\subsubsection{Golden Reference Model}
 A bit-accurate software model of the datapath was written independently of the
 RTL. It reproduces every arithmetic detail of the deployed pipeline: the host
 $Q8.8$ conversion with saturation, the truncating weight conversion performed by
@@ -682,7 +696,7 @@ token pipeline, the one-cycle BRAM read latency and the ping-pong write-back,
 and it is used to reason about pipeline alignment independently of the
 simulator.
 
-\paragraph{Directed RTL simulation.}
+\subsubsection{Directed RTL Simulation}
 Three directed tests exercise mutually independent mechanisms of the engine: a
 pass-through chain that isolates the multiply, reduce and rescale datapath, a
 bias-only chain that isolates the bias pipeline, and a multi-neuron test that
@@ -717,7 +731,7 @@ Input multiplexer & $2\!\rightarrow\!1$ & Each layer read from the wrong ping-po
 \end{tabular}
 \end{table}
 
-\paragraph{On-hardware bit-exact verification.}
+\subsubsection{On-Hardware Bit-Exact Verification}
 The corrected design was verified on the board against the golden model over a
 stimulus set constructed to exercise the saturation, ReLU, sign-transition and
 zero-padding paths, rather than over recorded market data. The reason is that
@@ -910,6 +924,11 @@ E & 40-10-16-8-3     & 56.86 & 57.01 & 0.15 & $-0.30$ \\
 \end{tabular}
 \end{table}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Latency and Determinism}
+\label{sec:latency}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 \subsection{System-Level Packet-to-Decision Latency}
 Table~\ref{tab:latency_metrics} reports the measured end-to-end
 packet-to-decision latency of the full FPGA system from a native Linux host,
@@ -1043,7 +1062,7 @@ with the issue of the next would require double-buffering the activations at
 sub-layer granularity and is left as future work; at the present operating point
 the core latency is in any case a small fraction of the end-to-end path.
 
-\paragraph{Arithmetic efficiency.}
+\subsubsection{Arithmetic Efficiency}
 The consequences for throughput are worth stating explicitly, since related work
 is frequently compared on this basis. With 192 multipliers at
 \SI{125}{\mega\hertz} the peak arithmetic rate is \SI{48}{GOP/s}. A single
@@ -1057,9 +1076,10 @@ overhead, the achieved rate is $2 \times 5168 / \SI{768}{\nano\second} \approx
 not overlap the reception of one feature vector with the computation of the
 previous one, which reduces the sustained rate to approximately
 \SI{0.77}{M} inferences per second. Both figures are far in excess of what the
-host-side path can supply (Section~\ref{sec:eval}), which is why the design is
+host-side path can supply (Section~\ref{sec:latency}), which is why the design is
 latency-optimized rather than throughput-optimized.
 
+\subsubsection{Per-Stage Breakdown of the End-to-End Path}
 The full end-to-end path was then instrumented with PS-side timestamps over
 1{,}004{,}229 packets (Table~\ref{tab:latency_breakdown}). The result isolates
 where the time is spent: of the \SI{68.6}{\micro\second} mean host-to-decision
@@ -1182,7 +1202,12 @@ gives 96, in agreement with both the analytic model and the
 rather than of the datapath, and the start-to-done convention is used
 throughout.
 
-\subsection{Comparison Against a Serial Baseline on the Same Device}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Baselines on the Same Device}
+\label{sec:baselines}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Sequential Hardware Baseline}
 \label{sec:baseline}
 The oscilloscope measurements establish that the hardware inference completes in
 \SI{768}{\nano\second}, deterministically. Interpreting that number requires a
@@ -1231,7 +1256,7 @@ from the archived source, and the one confound that remains, the clock, is
 separated out explicitly. The cross-platform comparisons of
 Table~\ref{tab:related_work} deserve correspondingly more caution.
 
-\subsection{Software Inference on the Same SoC}
+\subsection{Software Inference on the Cortex-A9}
 \label{sec:arm_baseline}
 The premise of the design is that moving inference off the processor and into
 the fabric is worth the effort, and on this device that premise can be tested
@@ -1303,6 +1328,11 @@ path returns the processor to its polling loop as soon as the DMA descriptor is
 posted. In a system whose residual latency is dominated by packet reception
 (Table~\ref{tab:latency_breakdown}), that difference compounds.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Implementation Results}
+\label{sec:implresults}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 \subsection{FPGA Resource Utilization}
 \label{sec:resources}
 Table~\ref{tab:resource_utilization} reports the post-implementation resource
@@ -1324,7 +1354,7 @@ The reported occupancy therefore counts \emph{tiles}, not stored data: roughly
 the input width or in the number of parallel neurons multiplies the tile count
 directly and exhausts the budget long before depth becomes a constraint.
 
-\paragraph{Timing.}
+\subsubsection{Timing}
 All constraints are met at the \SI{125}{\mega\hertz} target
 (\SI{8.000}{\nano\second} period), as summarized in Table~\ref{tab:timing}:
 setup WNS \SI{0.056}{\nano\second}, hold WHS \SI{0.027}{\nano\second}, pulse
@@ -1351,9 +1381,9 @@ Consolidating inputs into wider memory words would shorten the first of them and
 raise the achievable frequency, in addition to relaxing the capacity bound; we
 did not pursue it here because \SI{125}{\mega\hertz} is already supplied
 directly by the PS clock generator and the core latency is not the dominant
-term in the end-to-end path (Section~\ref{sec:eval}).
+term in the end-to-end path (Section~\ref{sec:latency}).
 
-\paragraph{Power.}
+\subsubsection{Power}
 Vivado's vectorless estimate for the implemented design is \SI{2.704}{\watt} of
 total on-chip power (\SI{2.509}{\watt} dynamic, \SI{0.196}{\watt} static) at a
 junction temperature of \SI{56.2}{\celsius}. We emphasize that this is a tool
@@ -1488,7 +1518,8 @@ exhausts the budget well before the depth of any individual memory becomes a
 constraint. Packing several inputs per memory word is the natural way to relax
 this limit and is left as future work.
 
-\subsection{Comparison with a Compiler-Generated Implementation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Comparison with a Compiler-Generated Implementation}
 \label{sec:hls4ml}
 The figures of Table~\ref{tab:related_work} are measured on different devices,
 for different networks and between different points. To place a measured point
@@ -1497,7 +1528,7 @@ Table~\ref{tab:verification} were also generated with hls4ml~1.3.0
 \cite{Schulte2026} for the same part (XC7Z020-1CLG484) at the same
 \SI{8}{\nano\second} target, using Vitis HLS and Vivado 2025.2.
 
-\paragraph{Same arithmetic.}
+\subsection{Same Arithmetic}
 The hls4ml models were configured to reproduce the arithmetic of the engine
 rather than hls4ml's defaults: weights, biases and activations in
 \texttt{ap\_fixed<16,8>}, accumulation in \texttt{ap\_fixed<40,24>} so that no
@@ -1510,7 +1541,7 @@ of the verification stimulus: all four networks agreed on every raw output and
 every decision. The comparison is therefore between two implementations of the
 same function, not between a 16-bit design and a narrower one.
 
-\paragraph{Design points.}
+\subsection{Design Points}
 hls4ml trades area for latency through the reuse factor (RF), the number of
 multiplications each multiplier performs per inference. Each network was
 generated with the \texttt{Resource} strategy and a parallel interface at
@@ -1570,7 +1601,7 @@ This work, all four & -- & 70 / 77 / 96 / 112 & $\geq$ lat. & 192 & 13{,}038 & 1
 \end{tabular}
 \end{table*}
 
-\paragraph{Result.}
+\subsection{Results}
 Only the four designs marked in Table~\ref{tab:hls4ml} close timing at
 \SI{125}{\mega\hertz}, three of hls4ml and the engine. On the two smaller
 networks, hls4ml at RF~8 reaches 456 to \SI{457}{\nano\second} against 560 and
