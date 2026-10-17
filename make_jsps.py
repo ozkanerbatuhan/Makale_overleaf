@@ -115,6 +115,31 @@ def main():
     body_end = tex.rfind("\n%%%", 0, body_end - 200) + 1  # ELSEVIER yorum blogu
     body = tex[body_start:body_end].rstrip() + "\n"
 
+    def fill_width(tab, width):
+        """\\begin{tabular}{spec}...\\end{tabular} -> tabular* genislik doldurur."""
+        head = r"\begin{tabular}"
+        if not tab.startswith(head):
+            return tab
+        i, depth = len(head), 0
+        for k in range(i, len(tab)):
+            depth += {"{": 1, "}": -1}.get(tab[k], 0)
+            if depth == 0:
+                break
+        spec = tab[i + 1:k]
+        inner = tab[k + 1:-len(r"\end{tabular}")]
+        # Yalniz metin sutunlu tablo (p/L): genislikleri oranla dagit, sola yasla.
+        cols = re.findall(r"[pL]\{([\d.]+)cm\}", spec)
+        rest = re.sub(r"@\{\}|[pL]\{[\d.]+cm\}|\s", "", spec)
+        if cols and not rest:
+            tot = sum(float(c) for c in cols)
+            spec = "".join(r"L{\dimexpr%.3f%s-2\tabcolsep\relax}" % (float(c) / tot, width)
+                           for c in cols)
+            return r"\begin{tabular}{" + spec + "}" + inner + r"\end{tabular}"
+        if spec.startswith("@{}"):
+            spec = spec[3:]
+        return (r"\begin{tabular*}{" + width + r"}{@{\extracolsep{\fill}}" + spec + "}" +
+                inner + r"\end{tabular*}")
+
     # Sekiller: figures/x -> x (Springer alt klasor istemiyor)
     body = body.replace("{figures/", "{")
 
@@ -132,12 +157,10 @@ def main():
         # sn-jnl'de \caption'dan sonra tabular kutuya alinamiyor (Missing
         # \endgroup); bu yuzden kutu yerine sabit sutunlari %10 daralt.
         tab = body[a:b]
+        pre = body[pos:a]
         # Dogrulama tablosu (5 sayisal sutun) sutuna 8 pt tasiyor: bir punto kucult.
         if r"\label{tab:verification}" in body[m.end():a]:
-            body_pre = body[pos:a].replace(r"\small", r"\footnotesize")
-            out.append(body_pre + tab)
-            pos = b
-            continue
+            pre = pre.replace(r"\small", r"\footnotesize")
         # Karsilastirma tablosu iki sutun genisliginde bos kaliyor: sutunlari ac.
         if r"\label{tab:related_work}" in body[m.end():a]:
             tab = re.sub(r"([pL])\{([\d.]+)cm\}",
@@ -145,7 +168,10 @@ def main():
         if env == "table":
             tab = re.sub(r"([pL])\{([\d.]+)cm\}",
                          lambda t: "%s{%.2fcm}" % (t.group(1), float(t.group(2)) * 0.9), tab)
-        out.append(body[pos:a] + tab)
+        # Dar tablo sutunun ortasinda kucuk duruyordu: tabular* ile tam genislige
+        # yay (fazla bosluk sutun aralarina dagilir).
+        tab = fill_width(tab, r"\textwidth" if env == "table*" else r"\columnwidth")
+        out.append(pre + tab)
         pos = b
     body = "".join(out) + body[pos:]
 

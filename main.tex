@@ -122,289 +122,154 @@ Deterministic latency
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Introduction}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-Embedded systems increasingly need to evaluate a small neural network on every
-input event, under a latency bound that must hold for the worst case rather than
-on average. The usual options each give up something. Running the network on the
-embedded processor keeps the model easy to change but leaves latency exposed to
-scheduling, interrupt handling, cache behavior and the depth of the software
-stack, so the distribution acquires a heavy tail even when the mean is
-acceptable. Moving the network into programmable logic removes those sources of
-variation, but the standard route through high-level synthesis binds the
-bitstream to one network: a retrained model, or a change of topology, costs a
-synthesis and place-and-route run measured in hours.
+Embedded systems increasingly evaluate a small neural network on every input
+event, under a latency bound that must hold for the worst case rather than on
+average. Running the network on the embedded processor keeps the model easy to
+change but exposes latency to scheduling, interrupts, caches and the software
+stack, so the distribution acquires a heavy tail. Moving the network into
+programmable logic removes those sources of variation, but the usual
+high-level-synthesis route binds the bitstream to one network: a retrained
+model, or a change of topology, costs a synthesis and place-and-route run
+measured in hours.
 
 This paper presents an inference engine that keeps the determinism of the
-fabric without inheriting that rigidity. The engine runs \emph{inside} the
-programmable logic of a low-cost Zynq-7000 SoC, is fed over Ethernet through the
-processing system and an AXI-DMA / AXI-Stream datapath, and treats the network
-shape as a run-time parameter: layer widths live in configuration registers, so
-networks of different topologies are loaded into an unchanged bitstream over
-AXI-Lite with no synthesis step between them. The input feature set, the
-fixed-point format and the number of decision classes are configurable on the
-same terms, which makes the design a reusable embedded inference engine rather
-than one fixed accelerator.
+fabric without that rigidity. The engine runs in the programmable logic (PL) of
+a low-cost Zynq-7000 SoC, is fed over Ethernet through the processing system
+(PS) and an AXI-DMA / AXI-Stream datapath, and treats the network shape as a
+run-time parameter: layer widths live in configuration registers, so networks of
+different topologies are loaded into an unchanged bitstream over AXI-Lite with
+no synthesis step between them.
 
 We evaluate it on a task that makes the latency requirement concrete. In
-high-frequency trading the time between the arrival of market data and the
-emission of an order is as important as the correctness of the order itself, and
-the competition is economically consequential rather than merely technical:
-Budish et al.~\cite{Budish2015} model the resulting latency race as an
-equilibrium feature of continuous limit order books, and Aquilina et
-al.~\cite{Aquilina2022} quantify its cost from exchange message data, finding
-races decided on the scale of microseconds. The workload used throughout is a
-three-class directional decision over Binance BTCUSDT trade data, specified in
-Section~\ref{sec:dataset}. Nothing in the architecture is specific to it; the
-task supplies a realistic input rate, a realistic network size and a worst-case
-requirement that a mean latency figure would not capture.
+high-frequency trading the time between market data and order matters as much
+as the correctness of the order: Budish et al.~\cite{Budish2015} model the
+resulting latency race as an equilibrium feature of continuous limit order
+books, and Aquilina et al.~\cite{Aquilina2022} find races decided on the scale
+of microseconds. The workload is a three-class directional decision over
+Binance BTCUSDT trade data (Section~\ref{sec:dataset}); nothing in the
+architecture is specific to it.
 
 \subsection{Main Contributions}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-The main contributions of this work are:
 \begin{itemize}
-  \item A hardware MLP inference core for a low-cost Zynq-7000 SoC built on 192
-        DSP-based multipliers and a fabric adder tree in a 13-stage pipeline,
-        whose latency follows an analytic model
-        ($\lceil n_\ell/3\rceil + 14$ cycles per layer) whose predicted total
-        agrees exactly with the measured input-to-done interval and with an
-        on-chip cycle counter read back on every inference, and whose per-layer
-        predictions agree with the oscilloscope captures to within one clock
-        cycle.
+  \item A 192-multiplier, 13-stage pipelined MLP core for the XC7Z020 whose
+        latency follows an analytic model ($\lceil n_\ell/3\rceil + 14$ cycles
+        per layer) that matches the oscilloscope and an on-chip cycle counter
+        exactly in total and to within one cycle per layer.
   \item Run-time reconfigurability of the network \emph{shape}, not only of its
-        weights: layer widths reside in configuration registers, so networks of
-        different topologies are deployed into an unchanged bitstream over
-        AXI-Lite without any synthesis step.
-  \item A three-level verification methodology (an independent bit-accurate
-        reference model, directed RTL simulation, and on-hardware comparison)
-        which uncovered three pipeline-alignment defects invisible to synthesis
-        and to end-to-end testing, and which after correction establishes
+        weights: four topologies run in one unchanged bitstream, each at its own
+        cycle count.
+  \item A three-level verification (independent bit-accurate model, directed
+        RTL simulation, on-hardware comparison) that exposed three
+        pipeline-alignment defects invisible to synthesis and then established
         bit-exact agreement over 400{,}000 inferences and 1{,}200{,}000 raw
-        output values across four topologies.
-  \item An Ethernet-fed hardware/software co-design with a per-stage latency
-        breakdown measured over $10^6$ packets, isolating how much of the
-        end-to-end path is attributable to the deterministic hardware core and
-        how much to the host and network software around it.
-  \item Quantitative evidence for the determinism claim rather than
-        illustrative captures: an on-chip cycle counter read back with every
-        inference shows a single-valued latency distribution over \num{100000}
-        inferences, and a like-for-like software baseline on the SoC's own
-        Cortex-A9, running identical fixed-point arithmetic, establishes the
-        cost of the alternative.
-  \item A measured comparison against a compiler-generated implementation:
-        the same four networks produced by hls4ml for the same part, clock
-        and bit-exact arithmetic, swept over five reuse factors and taken
-        through place and route, which locates the engine against the
-        compiler-based design space with post-route timing rather than
-        synthesis estimates.
+        outputs.
+  \item An end-to-end Ethernet-to-decision measurement with a per-stage
+        breakdown over $10^6$ packets, a zero-variance cycle count over
+        \num{100000} inferences, and like-for-like baselines on the same SoC.
+  \item A measured comparison against hls4ml for the same four networks, part,
+        clock and arithmetic, over five reuse factors taken through place and
+        route.
 \end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Related Work}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{FPGA Acceleration in Financial Systems}
-Reconfigurable logic has been applied to electronic trading since the point at
-which software network stacks ceased to be competitive at microsecond
-timescales. Leber et al.~\cite{Leber2011} moved market-data feed handling and
-order generation into an FPGA and reported wire-to-wire latencies roughly an
-order of magnitude below a tuned software path, establishing the pattern that
-the determinism of a fixed datapath matters as much as its mean latency.
-Lockwood and Monga~\cite{Lockwood2015} pursued the same argument at data-center
-scale, placing the entire service in programmable logic to remove operating
-system and kernel-stack variability. More recent work has raised the level of
-abstraction rather than the level of ambition: Puranik et
-al.~\cite{Puranik2023} synthesised a trading-system order-processing back end
-through a high-level synthesis flow, reporting roughly \SI{500}{\nano\second} per
-order against approximately \SI{1}{\micro\second} for the equivalent software,
-and Brown et al.~\cite{Brown2021} applied dataflow transformations to a
-credit-default-swap pricing engine on a data-center accelerator card.
-LightTrader~\cite{Yoo2023} is the closest system in intent, since it places a
-learned model inside the trading loop: an FPGA handles the network and order
-path, while the inference itself runs on dedicated deep-learning accelerator
-chips, and a scheduler trades model size against the time remaining before a
-deadline.
-
-What the fabric-resident designs share is that the accelerated function is fixed at
-elaboration time. A feed handler, an order book, a pricing kernel or a
-rule-based strategy is compiled into the fabric; changing the strategy means
-changing the bitstream. This is appropriate when the algorithm is stable, but it
-does not address the case in which the decision logic is a \emph{learned} model
-that is periodically retrained.
+Leber et al.~\cite{Leber2011} moved market-data feed handling and order
+generation into an FPGA and reported wire-to-wire latencies roughly an order of
+magnitude below a tuned software path; Lockwood and Monga~\cite{Lockwood2015}
+pursued the same argument at data-center scale. Puranik et
+al.~\cite{Puranik2023} synthesised an order-processing back end through
+high-level synthesis at roughly \SI{500}{\nano\second} per order, and Brown et
+al.~\cite{Brown2021} applied dataflow transformations to a credit-default-swap
+pricing engine. LightTrader~\cite{Yoo2023} is closest in intent: an FPGA
+handles the network and order path while the learned model runs on separate
+deep-learning accelerator chips. In all of these the accelerated function is
+fixed at elaboration time, which suits stable algorithms but not a learned model
+that is retrained periodically. Learned order-book models~\cite{Zhang2019,
+Ntakaris2018} are in turn evaluated offline and rarely report deployment
+latency.
 
 \subsection{Neural Network Inference on FPGAs}
-The FPGA deep-learning literature has largely converged on compiler-style
-frameworks that translate a trained network into a bitstream. Zhang et
-al.~\cite{Zhang2015} formalised the design-space exploration underlying such
-accelerators; Qiu et al.~\cite{Qiu2016} showed that the resulting designs fit
-within the resource envelope of an embedded Zynq part, and Angel-Eye~\cite{Guo2018}
-added a quantization flow and a compiler on top of that line of work; FINN~\cite{Umuroglu2017} and its successor
-FINN-R~\cite{Blott2018} generate dataflow architectures for binarized and
-quantized networks, reaching classification latencies of a few hundred
-nanoseconds; and hls4ml~\cite{Duarte2018} targets the same sub-microsecond
-regime for the trigger systems of particle-physics experiments, which resemble
-the trading problem in that a decision must be produced within a hard latency
-budget. hls4ml has since matured into a general compiler platform with several
-model front ends and hardware back ends~\cite{Schulte2026}, and
-da4ml~\cite{Sun2026} replaces its fully unrolled constant matrix-vector
-products with distributed arithmetic, cutting on-chip resources by up to a third
-while also reducing latency. Both gain their efficiency from the same source:
-the weights are constants of the circuit. The same low-cost XC7Z020 used here
-has also been targeted through Vitis HLS for latency-bound signal processing,
-meeting a \SI{70}{\micro\second} worst-case detection budget for LTE-A cognitive
-radio~\cite{deBroglie2024}. Two recent contributions to this journal show the
-range of the design style on Zynq-class parts. Gdaim et al.~\cite{Gdaim2026}
-drive an OpenCL high-level synthesis flow on a Zynq-7000 with predictive models
-of loop latency, throughput and BRAM feasibility that are evaluated before the
-hardware is deployed, and Rangsikunpum et al.~\cite{Rangsikunpum2026} implement
-a binarized traffic-sign classifier with an adversarial detector on Zynq SoCs
-including the ZedBoard used here, at over 9{,}000 frames per second within about
-\SI{2.8}{\watt}. Both are evaluated, as is usual for vision workloads, in frames
-per second rather than in single-inference latency. SparkNoC~\cite{sparknoc} and comparable edge accelerators optimize
-energy efficiency for convolutional workloads, while
-Tsoutsouras et al.~\cite{Tsoutsouras2017} show the same
-exploration methodology applied to a non-neural classifier on a Zynq SoC;
-Wang et al.~\cite{Wang2019survey} survey the field more broadly.
-On embedded SoC targets the movement of data between the processing system and
-the fabric is frequently the limiting factor rather than the arithmetic itself,
-as quantified for a CNN accelerator by Rios-Navarro et
-al.~\cite{RiosNavarro2018}, an observation that the per-stage breakdown of
-Section~\ref{sec:latency} reproduces for the present design.
+The FPGA deep-learning literature has converged on compiler-style frameworks
+that translate a trained network into a bitstream. Zhang et
+al.~\cite{Zhang2015} formalised the underlying design-space exploration, Qiu et
+al.~\cite{Qiu2016} and Angel-Eye~\cite{Guo2018} brought it to embedded Zynq
+parts, FINN~\cite{Umuroglu2017} and FINN-R~\cite{Blott2018} generate dataflow
+architectures for quantized networks with latencies of a few hundred
+nanoseconds, and hls4ml~\cite{Duarte2018} targets the same regime for
+particle-physics triggers, which share the hard latency budget of trading.
+hls4ml has since become a general compiler platform~\cite{Schulte2026}, and
+da4ml~\cite{Sun2026} replaces its constant matrix-vector products with
+distributed arithmetic. Both gain their efficiency from weights that are
+constants of the circuit. On the XC7Z020 used here, Vitis HLS has met a
+\SI{70}{\micro\second} worst-case budget for cognitive radio~\cite{deBroglie2024};
+in this journal, Gdaim et al.~\cite{Gdaim2026} guide an OpenCL HLS flow on a
+Zynq-7000 with predictive latency and BRAM models, and Rangsikunpum et
+al.~\cite{Rangsikunpum2026} run a binarized classifier on the same ZedBoard at
+over 9{,}000 frames per second within about \SI{2.8}{\watt}. Edge CNN
+accelerators such as SparkNoC~\cite{sparknoc} optimize energy efficiency,
+Tsoutsouras et al.~\cite{Tsoutsouras2017} apply the same methodology to a
+non-neural classifier, and Wang et al.~\cite{Wang2019survey} survey the field.
+On SoC targets the PS--PL data movement is often the limiting
+factor~\cite{RiosNavarro2018}, which the breakdown of Section~\ref{sec:latency}
+reproduces. Fixed-point inference preserves accuracy for a wide range of
+networks~\cite{Jacob2018,Hubara2017,Gholami2021}, and quantization noise in MLPs
+can be predicted analytically~\cite{AlRikabi2024}.
 
-The arithmetic these designs rely on is well understood. Fixed-point and
-integer-only inference has been shown to preserve accuracy for a wide range of
-networks~\cite{Jacob2018,Hubara2017}, and the trade-offs are surveyed
-comprehensively by Gholami et al.~\cite{Gholami2021}; for multi-layer
-perceptrons specifically, the propagation of quantization noise through the
-layers can be predicted analytically~\cite{AlRikabi2024}. The $Q8.8$ format
-adopted here sits at the conservative end of that spectrum.
-
-The common property of this second group is that the network topology is baked
-into the generated hardware. FINN, FINN-R, Angel-Eye and hls4ml all require a
-new synthesis and implementation run when the network changes, which for a
-mid-size design is a multi-hour turnaround. They are also, without exception,
-evaluated as compute kernels: the input arrives from host memory or an on-chip
-stream, and the network interface is outside the scope of the reported latency.
+All of these require a new synthesis run when the network changes, and all are
+evaluated as compute kernels with the network interface outside the reported
+latency.
 
 \subsection{Run-Time Programmable Overlays}
 \label{sec:overlays}
-A separate line of work removes the re-synthesis requirement by placing a fixed,
-programmable engine on the fabric and expressing the network as data rather than
-as logic. VTA~\cite{Moreau2019} defines an instruction set for tensor operations
-and a compiler stack above it, so that a change of network is a change of
-instruction stream. OPU~\cite{Yu2020} and its lightweight
-successor~\cite{YuLight2020} make the same argument specifically for
-convolutional networks on FPGAs, and state the property explicitly: the network
-is compiled to microcode that the overlay executes without reconfiguration.
-Commercial toolchains adopt the same model: the deep-learning processing unit
-shipped by AMD for Zynq and Versal parts~\cite{AMDVitisAI} is a fixed overlay
-driven by compiled instructions, so that a new network is deployed by recompiling its instruction
-stream rather than by re-implementing the device. Khaki and
-Choi~\cite{Khaki2025} use that flow to deploy pruned and quantized lightweight
-CNNs and report latencies of \SI{6.28}{} to \SI{19.95}{\milli\second} per
-frame, which is the operating point such overlays are built for. The idea has since been
-carried to transformers: the runtime-adaptive accelerator of Kabir et
-al.~\cite{Kabir2026} executes different transformer models through
-software-set parameters without re-synthesis. Ratto et al.~\cite{Ratto2023}
-derive run-time reconfigurable accelerators from an ONNX description, but use
-the reconfigurability to trade execution time for power within one network
-rather than to change the network. Closest to the present work in its latency
-target, SLAC's Neural Network Library~\cite{EzzaouiRahali2025} keeps
-HLS-generated layers in the style of hls4ml, against which it is benchmarked,
-but loads weights and biases at run time without re-synthesis; the published
-description presents this as a reload of the weights rather than as a change of
-the layer dimensions.
+Overlays remove re-synthesis by expressing the network as data for a fixed
+engine. VTA~\cite{Moreau2019} defines a tensor instruction set and compiler,
+OPU~\cite{Yu2020,YuLight2020} compiles CNNs to microcode, and AMD's
+deep-learning processing unit~\cite{AMDVitisAI} is a fixed overlay driven by
+compiled instructions; Khaki and Choi~\cite{Khaki2025} use it for lightweight
+CNNs at 6.28 to \SI{19.95}{\milli\second} per frame. Kabir et
+al.~\cite{Kabir2026} carry the idea to transformers, and Ratto et
+al.~\cite{Ratto2023} use run-time reconfiguration to trade time for power within
+one network. SLAC's Neural Network Library~\cite{EzzaouiRahali2025} keeps
+HLS-generated layers but reloads weights and biases at run time; its published
+description presents this as a weight reload rather than a change of layer
+dimensions. Dynamic partial reconfiguration rewrites the fabric itself:
+Boudjadar et al.~\cite{Boudjadar2025} apply it on the XC7Z020 at
+\SI{0.68}{\second} per image, but every module must still be synthesized in
+advance and the region is out of service while it is rewritten.
 
-Dynamic partial reconfiguration offers a third mechanism, in which the fabric
-itself is rewritten at run time. Boudjadar et al.~\cite{Boudjadar2025} apply it
-to CNN acceleration on the same XC7Z020 used here, reporting
-\SI{0.68}{\second} per image. Partial reconfiguration avoids a full synthesis
-run at deployment, but each module still has to be synthesized in advance and
-the reconfiguration itself takes the device region out of service, which rules
-it out for changes made while inference is in progress.
-
-The engine described in this paper belongs to this family, and we make no claim
-to have introduced run-time programmability. The distinction lies in the design
-point rather than in the mechanism. Published overlays are throughput
-architectures: they are dimensioned for convolutional workloads, evaluated in
-frames or images per second, and their reported latencies are per batch or per
-frame rather than per inference. Among published overlays that change the network shape without re-synthesis we are aware of none
-that reports single-inference latency below one microsecond, and the reason is
-structural rather than incidental: overlay evaluations are reported per frame or
-per batch, and the tiled dataflow that gives an overlay its generality implies
-that a network of this size occupies the engine for many passes. We state the
-claim in this restricted form because it rests on the absence of a reported
-figure rather than on a measurement of our own. The present design accepts a much narrower
-scope, fully connected layers within fixed bounds, in exchange for a latency
-figure that is a property of a single inference.
+We do not claim to have introduced run-time programmability. Published overlays
+are throughput architectures, dimensioned for convolutional workloads and
+reported per frame or per batch; among those that change the network shape
+without re-synthesis we are aware of none that reports single-inference latency
+below one microsecond. The present design accepts a narrower scope, fully
+connected layers within fixed bounds, for a latency that is a property of a
+single inference.
 
 \subsection{The Latency Extreme}
-At the opposite end of the trade-off, LogicNets~\cite{Umuroglu2020} abandons
-arithmetic units altogether and compiles quantized neurons directly into
-lookup-table logic, reaching inference latencies of the order of nanoseconds for
-networks comparable in size to the one considered here. Subsequent work in the
-same direction has extended the approach to higher-order functions, by learning
-piecewise polynomials inside each lookup table~\cite{Andronic2023}, and to
-deeper topologies, by hiding a multi-layer sub-network inside a single
-synthesizable Boolean function~\cite{Andronic2024}. More recent work widens
-the inputs each table can take~\cite{Lou2024}, assembles larger networks from
-LUT-mapped sub-networks~\cite{Andronic2025}, and applies the same mapping to
-gradient-boosted decision trees~\cite{Khataei2025}.
-
-These results are one to two orders of magnitude faster than the
-\SI{768}{\nano\second} reported below, and we state that plainly rather than
-selecting a comparison that flatters the present work. The relevant question is
-what the difference buys. Compiling a network into LUT logic makes its weights
-part of the circuit: retraining requires a new synthesis, place and route, and
-bitstream. For a model that is retrained on a schedule, that turnaround is the
-binding constraint rather than the inference latency. The design space therefore
-has at least three distinguishable points, and the present work occupies the
-middle one: LUT-mapped networks give nanoseconds with per-model synthesis,
-overlays give re-programmability with per-frame throughput, and the engine
-described here gives sub-microsecond single-inference latency with
-re-programmability, on a low-cost part.
-
-\subsection{Learned Models for Order-Book Prediction}
-On the modelling side, deep networks applied to limit-order-book data are an
-established line of work. Zhang et al.~\cite{Zhang2019} combine convolutional
-and recurrent layers for mid-price movement prediction, and the FI-2010
-benchmark of Ntakaris et al.~\cite{Ntakaris2018} provides a common evaluation
-basis. This literature is concerned with predictive quality and is typically
-evaluated offline; the deployment latency of the resulting model is rarely
-reported, and the models are generally too large for a microsecond decision
-budget without substantial compression.
+LogicNets~\cite{Umuroglu2020} compiles quantized neurons directly into
+lookup tables and reaches nanosecond latencies; later work learns piecewise
+polynomials per table~\cite{Andronic2023}, hides sub-networks inside Boolean
+functions~\cite{Andronic2024}, widens table inputs~\cite{Lou2024}, assembles
+larger networks~\cite{Andronic2025}, and maps decision trees~\cite{Khataei2025}.
+These designs are one to two orders of magnitude faster than the
+\SI{768}{\nano\second} reported here, but their weights are part of the circuit,
+so every retraining requires a new bitstream.
 
 \subsection{Positioning of This Work}
-Taken together, the preceding sections describe a trade-off between how fast a
-single inference completes and how expensive it is to change the model.
-LUT-mapped networks sit at one end, compiler-generated dataflow accelerators in
-the middle, and overlays at the other end. What is missing from that spectrum,
-and what this paper contributes, is a point that combines sub-microsecond
-single-inference latency with re-programmability, on a part that costs a few
-hundred dollars, together with evidence that the deployed arithmetic is correct.
-
-We therefore do not claim run-time reconfigurability as such, nor the lowest
-latency in the literature. The claim is the conjunction of four properties, none
-of which is individually novel but whose combination we have not found reported:
-(i) single-inference latency below one microsecond, given as an analytic
-function of the network shape and confirmed on hardware; (ii) deployment of
-networks of different topologies into an unchanged bitstream; (iii) an Ethernet
-to decision path measured end to end, with the contribution of each stage
-separated; and (iv) bit-exact agreement between the deployed arithmetic and an
-independent reference model over $4\times10^{5}$ inferences. The fourth is
-uncommon in this literature and, as Section~\ref{sec:verification} reports, was
-not a formality in our case.
-
-Table~\ref{tab:related_work} positions the work against representative prior
-designs. We note that the comparison of absolute latency figures across these
-rows is of limited value, since the reported quantities are not measured between
-the same two points: FINN and hls4ml report a compute-kernel latency, whereas the
-figure reported here is the end-to-end path from an Ethernet frame to a decision.
-The core latency of this design is given separately in
-Section~\ref{sec:latency} to make the comparison meaningful.
-
-For the compiler-based part of the design space we do not rely on these
-figures alone. Section~\ref{sec:hls4ml} reports a like-for-like implementation
-of the same four networks generated by hls4ml on the same device, at the same
-clock and with bit-identical arithmetic, so that this end of the spectrum is
-represented by a measured point rather than an argued one.
+The design space thus has three points: LUT-mapped networks give nanoseconds
+with per-model synthesis, overlays give re-programmability at per-frame
+throughput, and the present engine gives sub-microsecond single-inference
+latency with re-programmability on a low-cost part. The claim is the
+conjunction of four properties, none individually novel: (i) single-inference
+latency below one microsecond, given analytically and confirmed on hardware;
+(ii) different topologies in one unchanged bitstream; (iii) an Ethernet-to-
+decision path measured end to end and per stage; and (iv) bit-exact agreement
+with an independent reference over $4\times10^{5}$ inferences.
+Table~\ref{tab:related_work} positions the work; its latency figures are not
+measured between the same points, and Section~\ref{sec:hls4ml} supplies a
+like-for-like comparison with hls4ml.
 
 \begin{table*}[t]
 \centering
@@ -437,27 +302,25 @@ This work & Zynq XC7Z020 & MLP, run-time shape & 16\,bit & No & Yes & 768\,ns co
 \end{table*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Proposed Framework}
+\section{Architecture and Implementation}
 \label{sec:framework}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 \subsection{System Overview}
-The proposed system follows a strict hardware/software partition on a single
-Zynq SoC, illustrated in Fig.~\ref{fig:block_design}. Market data arrives over
-Ethernet and is received by the PS, which prepares the feature vector and
-issues it to the PL through an AXI-DMA engine. The custom
-\texttt{mlp\_axi\_wrapper} IP receives the stream, runs the inference core, and
-returns the decision and status through AXI-Lite. The PS therefore performs
-only I/O and control, while the entire inference workload is executed in the
-PL fabric. The end-to-end conceptual flow is:
-\begin{center}
-\small Ethernet $\rightarrow$ PS $\rightarrow$ AXI-DMA/Stream $\rightarrow$
-MLP core $\rightarrow$ BUY/HOLD/SELL.
-\end{center}
+Fig.~\ref{fig:block_design} shows the partition. Ethernet frames are received
+by the PS, which runs bare-metal lwIP and hands the feature vector to the PL
+through AXI-DMA; the \texttt{mlp\_axi\_wrapper} receives the stream, runs the
+core, and exposes the class scores over AXI-Lite. Each 32-bit stream word
+carries two 16-bit $Q8.8$ values, and the 40 features, zero-padded to the
+64-wide datapath, arrive as 32 words on which the engine starts. Feature
+construction and quantization happen on the host, so the PS only copies the
+received vector into a DMA buffer; the argmax over the three scores runs on the
+PS after read-back and is counted in the readout stage of the latency
+breakdown. A model is deployed by quantizing it on the host and writing the
+weights, biases and layer widths over AXI-Lite; the bitstream is unchanged.
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.92\textwidth]{figures/system_architecture.png}
+\includegraphics[width=\textwidth]{figures/system_architecture.pdf}
 \caption{System architecture of the proposed framework on the Zynq-7000 SoC.
 Market data arrives over Ethernet at the PS, which forwards the prepared
 feature vector to the custom \texttt{mlp\_axi\_wrapper} core through
@@ -467,89 +330,19 @@ pipelined inference engine in the PL.}
 \label{fig:block_design}
 \end{figure*}
 
-\subsection{Ethernet-Enabled Data Path}
-Feature packets are delivered over Ethernet to the PS, parsed, and forwarded to
-the PL. Each 32-bit AXI-Stream word carries two 16-bit $Q8.8$ values, and the 40
-features, zero-padded to the 64-wide datapath, are transferred as 32 stream
-words on which the engine auto-starts. Every stage of this path is instrumented with PS-side timestamps and quantified
-over a 1{,}004{,}229-packet run in Section~\ref{sec:latency}
-(Table~\ref{tab:latency_breakdown}).
-
-
-\subsection{Customization Flow}
-The framework is reusable across models and strategies. A user trains an MLP on
-their own dataset and feature set; the trained parameters are quantized on the
-host and written, together with the layer widths, into the on-chip weight and
-bias memories over AXI-Lite, while the bitstream, and with it the datapath, AXI
-interfaces, and control logic, is unchanged. Table~\ref{tab:customization_options}
-summarizes the configurable components.
-
-\begin{table}[htbp]
-\centering
-\caption{Customization options supported by the proposed framework}
-\label{tab:customization_options}
-\begin{tabular}{p{3.0cm} p{4.4cm}}
-\toprule
-Component & Customizable Parameters \\
-\midrule
-Input features & Feature vector contents and size (default 40) \\
-MLP model & Retrainable weights/biases; hidden-layer sizes \\
-Fixed-point format & Word/fraction split (default $Q8.8$) \\
-Output decision & Class set, e.g.\ BUY / HOLD / SELL \\
-Deployment flow & Host-side quantization and AXI-Lite upload, no synthesis \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{FPGA-Embedded Neural Inference Architecture}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-The embedded network is an MLP with topology
-$40\!\rightarrow\!64\!\rightarrow\!32\!\rightarrow\!16\!\rightarrow\!3$: a
-40-dimensional input feature vector, three hidden layers with ReLU activation,
-and a 3-class output (BUY/HOLD/SELL); the argmax over the three raw scores is
-evaluated by the PS after read-back.
-Inference is performed entirely in hardware; no layer is offloaded to the PS.
-
-\subsection{Fixed-Point Quantization}
-The floating-point model is converted to a $Q8.8$ fixed-point representation
-(8 integer, 8 fractional bits), which lowers resource usage and enables
-single-cycle DSP multiplications while preserving accuracy. Weights and biases
-are stored in BRAM and addressed through the AXI-Lite configuration interface.
-Table~\ref{tab:quantization_eval} reports the effect of quantization on the
-reference model. The fidelity of the \emph{hardware} implementation of this
-arithmetic is a separate question and is established independently in
-Section~\ref{sec:verification}.
-
-\begin{table}[htbp]
-\centering
-\caption{Effect of $Q8.8$ quantization on the reference model}
-\label{tab:quantization_eval}
-\begin{tabular}{p{3.1cm} p{4.3cm}}
-\toprule
-Metric & Value \\
-\midrule
-Float accuracy & 61.74\% \\
-$Q8.8$ accuracy & 61.65\% \\
-$Q8.8$ vs.\ float agreement & 99.93\% (macro F1 0.990) \\
-Class change ratio (float vs.\ $Q8.8$) & 0.074\% \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Parallel-Multiplier Inference Core}
-The inference core (\texttt{mlp\_engine}) is built around 192 DSP slices used as
-parallel multipliers. The accumulation is not performed inside the DSP blocks but
-by a fabric adder tree, which is why the logic utilization is dominated by the
-reduction network rather than by the multiplications. The core is organized as a
-13-stage pipeline (Fig.~\ref{fig:microarch}): one address-issue stage (S0) followed by
-twelve datapath stages. Stages 1 and 2 read weights/inputs from BRAM
-and register them; stages 3 and 4 perform the 192 parallel multiplications;
-stages 5 to 10 reduce the products through a balanced $64\!\rightarrow\!1$ adder
-tree; stage 11 adds the bias; and stage 12 rescales the result and applies the
-ReLU activation before write-back.
-Two ping-pong buffers (Buffer~A / Buffer~B) hold the inter-layer activations so
-that successive layers reuse the same multiplier array.
+\subsection{Inference Core}
+The core (\texttt{mlp\_engine}, Fig.~\ref{fig:microarch}) uses 192 DSP slices as
+parallel multipliers; accumulation is done by a fabric adder tree rather than
+inside the DSP blocks, which is why logic utilization is dominated by the
+reduction network. The 13-stage pipeline has one address-issue stage (S0)
+followed by twelve datapath stages: S1--2 read and register weights and inputs,
+S3--4 multiply, S5--10 reduce through a balanced $64\!\rightarrow\!1$ tree, S11
+adds the bias, and S12 rescales, saturates and applies ReLU. Each token carries
+three neurons of 64 inputs, and two ping-pong buffers hold the inter-layer
+activations so that every layer reuses the same multiplier array. Arithmetic is
+$Q8.8$ with 40-bit accumulation, an arithmetic right shift and 16-bit
+saturation; weights and biases reside in 195 block memories written through
+AXI-Lite (address bit~17 selects configuration or memory).
 
 \begin{figure*}[t]
 \centering
@@ -566,90 +359,32 @@ loaded via AXI-Lite (address bit~17 selects configuration vs.\ memory).}
 \label{fig:microarch}
 \end{figure*}
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Implementation on Zynq-7000 SoC}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\subsection{Hardware/Software Partitioning}
-Table~\ref{tab:hw_sw_partitioning} lists where each function is implemented.
-The PL implements the entire inference datapath and the measurement signals; the
-PS is responsible for the network interface, for handing the received feature
-vector to the DMA engine, and for high-level control.
-
-Two aspects of this partition should be stated plainly, because they bound what
-the reported latency covers. First, feature construction and the conversion to
-$Q8.8$ are performed \emph{upstream of the board}: the packet arriving at the PS
-already contains a quantized, zero-padded vector, and the PS copies it into a
-DMA-aligned buffer without transforming it. Moving feature construction onto the
-PS would add work to the measured path and is not claimed here. Second, the
-argmax over the three output scores is evaluated in PS software after the scores
-have been read back over AXI-Lite; it is a three-way comparison and is included
-in the read-out stage of the latency breakdown
-(Table~\ref{tab:latency_breakdown}) rather than in the core latency. Moving it
-into the PL would remove two of the three AXI-Lite reads and is a
-straightforward extension.
-
-\begin{table}[t]
-\centering
-\caption{Hardware/software partitioning of the proposed system}
-\label{tab:hw_sw_partitioning}
-\begin{tabular}{p{2.8cm} p{4.6cm}}
-\toprule
-Component & Implementation Location \\
-\midrule
-Ethernet packet reception & PS (software) \\
-Feature vector hand-off & PS (software, \texttt{memcpy}) \\
-Feature vector transfer & AXI-DMA (PS$\rightarrow$PL) \\
-MLP inference & PL (hardware) \\
-Argmax decision & PS (software, after read-back) \\
-Status/result registers & AXI-Lite (PS$\leftrightarrow$PL) \\
-Debug signals & PL output pins \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{AXI-Stream and AXI-DMA Interface}
-The PS prepares the feature vector and transfers it to the PL with AXI-DMA; the
-\texttt{mlp\_axi\_wrapper} consumes it as an AXI-Stream slave, splitting each
-32-bit word into two $Q8.8$ operands and starting the engine once a full vector
-is received. Control and status (start, busy, done, result) use AXI-Lite. This
-keeps the inference pipeline continuously fed without per-operand PS
-intervention.
-
-\subsection{Debug and Measurement Infrastructure}
-To measure hardware timing directly, the core exports the dedicated debug
-signals of Table~\ref{tab:debug_signals}. \texttt{dbg\_data\_in\_pulse} marks
-the arrival of a complete feature vector, \texttt{dbg\_layer1\_done} to \texttt{dbg\_layer4\_done} pulse as
-each layer finishes, and \texttt{dbg\_mlp\_busy} brackets the whole inference.
-These pins are probed with an oscilloscope, so the per-layer latency is observed
-on real silicon rather than estimated (Section~\ref{sec:latency}).
-
-\begin{table}[htbp]
-\centering
-\caption{Debug signals exported for hardware latency measurement. All signal
-names carry the prefix \texttt{dbg\_}, omitted here for space.}
-\label{tab:debug_signals}
-\small
-\begin{tabular}{@{}L{2.3cm}L{5.0cm}@{}}
-\toprule
-Signal & Purpose \\
-\midrule
-\texttt{data\_in\_pulse} & Full feature vector received \\
-\texttt{layer1\_done}    & Layer 1 ($40\!\rightarrow\!64$) complete \\
-\texttt{layer2\_done}    & Layer 2 ($64\!\rightarrow\!32$) complete \\
-\texttt{layer3\_done}    & Layer 3 ($32\!\rightarrow\!16$) complete \\
-\texttt{layer4\_done}    & Layer 4 ($16\!\rightarrow\!3$) complete \\
-\texttt{mlp\_busy}       & Inference in progress; decision valid on the falling edge \\
-\bottomrule
-\end{tabular}
-\end{table}
+\subsection{Measurement Infrastructure}
+The core exports a data-in pulse, one done pulse per layer and a busy signal on
+debug pins, so per-layer timing can be observed with an oscilloscope. A 16-bit
+cycle counter, cleared when \texttt{start} is accepted and latched when the
+final layer finishes, is read back over AXI-Lite after every inference. The
+firmware also timestamps each stage of the on-board path with the Zynq Global
+Timer and returns the timestamps in the reply.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Experimental Evaluation}
 \label{sec:eval}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 \subsection{Experimental Setup}
+Table~\ref{tab:experimental_setup} summarizes the setup. A host application
+(Fig.~\ref{fig:gui}) uploads the quantized model and streams market data or
+test packets to the board. Two kinds of run are reported. The host round-trip
+runs time each UDP request at the host, over \num{100000} requests for each of
+the four networks of Section~\ref{sec:verification}, from a native Linux host and
+from a Windows host; they underlie Table~\ref{tab:latency_metrics} and
+Section~\ref{sec:osbaseline}. A longer instrumented run of 1{,}004{,}229 packets
+underlies the per-stage breakdown of Table~\ref{tab:latency_breakdown}. The two
+give medians of \SI{66.9}{} and \SI{68.5}{\micro\second} for the reference
+network because they were taken at different times; their on-board subtotals
+agree to within \SI{0.4}{\micro\second}, and no claim depends on the
+difference.
+
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.86\linewidth]{figures/host_gui_annotated.png}
@@ -659,32 +394,6 @@ and inter-packet delay, (e) event log. Deploying a different network is the
 single action in panel (c); no synthesis step is involved.}
 \label{fig:gui}
 \end{figure}
-
-The framework is implemented on a Xilinx Zynq-7000 SoC. A host control
-application (Fig.~\ref{fig:gui}) connects to the C++ host engine, uploads the
-quantized model, and streams either real CSV market data or randomized test
-packets while reporting the last prediction, last latency, and processed-packet
-count. Table~\ref{tab:experimental_setup} summarizes the setup.
-
-Two kinds of run are reported in what follows and should not be conflated. The
-first measures the host round trip on the bitstream that is characterized
-throughout the paper: the host timestamps a request before transmission and
-after the reply arrives, over \num{100000} requests for each of the four
-networks of Section~\ref{sec:verification}, from a native Linux host and, for
-comparison, from a Windows host. These runs are the basis of
-Table~\ref{tab:latency_metrics} and of Section~\ref{sec:osbaseline}. The second
-is a longer instrumented run of 1{,}004{,}229 packets, in which the firmware
-timestamps each stage of the on-board path with the Global Timer and returns the
-timestamps in the reply; it is the basis of Table~\ref{tab:latency_breakdown}.
-The two give slightly different end-to-end figures for the reference network (a
-median of \SI{66.9}{\micro\second} against \SI{68.5}{\micro\second}) because
-they were taken at different times with different host load; the on-board
-subtotal, which both runs record, agrees to within \SI{0.4}{\micro\second} in
-the median. The difference is small relative to the host-side variability
-characterized in Section~\ref{sec:osbaseline}, and no claim in this paper
-depends on it; where a single end-to-end number is quoted we use the
-instrumented run, since it is the one whose composition is known.
-
 
 \begin{table}[t]
 \centering
@@ -710,51 +419,34 @@ Clock frequency & \SI{125}{\mega\hertz} (PL) \\
 \end{tabular}
 \end{table}
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Functional Verification of the Inference Core}
 \label{sec:verification}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-Reporting latency and resource figures for an accelerator is only meaningful if
-the accelerator is first shown to compute the intended function. We therefore
-verify the core at three levels before reporting any performance result.
-
 \subsubsection{Golden Reference Model}
-A bit-accurate software model of the datapath was written independently of the
-RTL. It reproduces every arithmetic detail of the deployed pipeline: the host
-$Q8.8$ conversion with saturation, the truncating weight conversion performed by
-the on-board loader, the 40-bit accumulation, the arithmetic right shift, the
-16-bit saturation, the ReLU on all but the output layer, and the argmax rule
-used by the decision logic. A second, cycle-accurate model of
-\texttt{mlp\_engine} was also written; it reproduces the issue FSM, the 13-stage
-token pipeline, the one-cycle BRAM read latency and the ping-pong write-back,
-and it is used to reason about pipeline alignment independently of the
-simulator.
+A bit-accurate software model was written independently of the RTL. It
+reproduces the host $Q8.8$ conversion with saturation, the truncating weight
+conversion of the loader, the 40-bit accumulation, the shift, the 16-bit
+saturation, ReLU on all but the output layer, and the argmax rule. A second,
+cycle-accurate model of \texttt{mlp\_engine} reproduces the issue FSM, the token
+pipeline, the one-cycle memory latency and the ping-pong write-back.
 
 \subsubsection{Directed RTL Simulation}
-Three directed tests exercise mutually independent mechanisms of the engine: a
-pass-through chain that isolates the multiply, reduce and rescale datapath, a
-bias-only chain that isolates the bias pipeline, and a multi-neuron test that
-isolates the write-back indexing. Each test writes its parameters through the
-same AXI-Lite address map used by the on-board loader, streams a stimulus vector
-over AXI-Stream, and compares the three read-back outputs against values
-computed by hand. Input positions that are not overwritten by the network are
-pre-loaded with distinctive values, so that a missing write-back cannot be
-mistaken for a correct result.
-
-This step exposed three pipeline-alignment defects in the original design that
-were invisible to synthesis and to end-to-end testing
-(Table~\ref{tab:rtl_defects}). All three are one-line index corrections; none
-changes the pipeline depth, the resource usage or the timing closure of the
-design. After correction, the cycle-accurate model matched the golden reference
-on 240 randomly generated cases (60 random parameter sets $\times$ 4 random
-input vectors), whereas the original alignment matched on none.
+Three directed tests isolate the multiply-reduce-rescale path, the bias pipeline
+and the write-back indexing. Each writes its parameters through the same
+AXI-Lite map as the loader, streams a stimulus over AXI-Stream, and compares
+the outputs against hand-computed values; unused input positions are preloaded
+with distinctive values so that a missing write cannot pass as correct. The
+tests exposed three pipeline-alignment defects (Table~\ref{tab:rtl_defects}),
+each a one-line index correction that changes neither depth, resources nor
+timing. After correction the cycle-accurate model matched the golden reference
+on 240 random cases (60 parameter sets $\times$ 4 inputs); the original
+alignment matched none.
 
 \begin{table}[htbp]
 \centering
 \caption{Pipeline-alignment defects found by directed simulation}
 \label{tab:rtl_defects}
 \small
-\begin{tabular}{@{}p{2.0cm}p{1.0cm}p{4.4cm}@{}}
+\begin{tabular}{@{}p{2.0cm}p{1.3cm}p{4.1cm}@{}}
 \toprule
 Signal & Stage & Consequence \\
 \midrule
@@ -766,42 +458,25 @@ Input multiplexer & $2\!\rightarrow\!1$ & Each layer read from the wrong ping-po
 \end{table}
 
 \subsubsection{On-Hardware Bit-Exact Verification}
-The corrected design was verified on the board against the golden model over a
-stimulus set constructed to exercise the saturation, ReLU, sign-transition and
-zero-padding paths, rather than over recorded market data. The reason is that
-the features of Section~\ref{sec:dataset} are clipped to $[-5, 5]$ and therefore
-occupy a narrow band near the center of the $Q8.8$ interval: replayed market
-data never drives the accumulator toward saturation and never exercises the
-clamping logic, so it cannot distinguish a correct datapath from one whose
-saturation path is broken. A verification stimulus has to reach the corners that
-the application itself does not. The firmware was extended to return the three
-raw 16-bit output values alongside the decision, so that the comparison is
-made on the arithmetic itself and not only on the argmax.
+The corrected design was verified on the board against the golden model with a
+stimulus built to exercise saturation, ReLU, sign transitions and zero padding.
+Recorded market data cannot do this: its features are clipped to $[-5,5]$ and
+never drive the accumulator toward saturation. The firmware returns the three
+raw 16-bit outputs with every decision, so the comparison is made on the
+arithmetic and not only on the argmax. Across four networks the hardware
+reproduced the golden model on all 400{,}000 inferences and 1{,}200{,}000 raw
+outputs (Table~\ref{tab:verification}).
 
-Table~\ref{tab:verification} reports the result. Across four networks the
-hardware reproduced the golden model on 400{,}000 inferences and on all
-1{,}200{,}000 raw output values, without a single discrepancy. We note that
-agreement on the decision alone would be a weak check when the output
-distribution is concentrated on one class; the per-output comparison is reported
-for this reason.
-
-A second weakness is specific to a reconfigurable engine and has to be closed
-explicitly: if the loader and the reference model both mapped every network
-onto the same fixed shape, for example by padding or clipping it to the largest
-layer widths, they would agree perfectly while the shape mechanism itself went
-untested. The campaign is constructed to exclude this. The golden model
-evaluates each network at its true, untruncated topology; the loader writes the
-per-layer width registers of Section~\ref{sec:reconfig} before streaming the
-stimulus; and the cycle counter of Section~\ref{sec:determinism}, logged with
-every inference, records how many iterations the controller actually issued.
-The last column of Table~\ref{tab:verification} shows a distinct, single-valued
-count for each topology, each one cycle below the value \eqref{eq:cycles}
-predicts for that shape, the offset being the counting convention explained in
-Section~\ref{sec:determinism}. Had the hardware run a padded network, all four
-counts would have been equal.
-The four runs used the bitstream whose resource, timing and power figures are
-reported in Section~\ref{sec:resources}; the bitstream inside the boot image was
-compared byte for byte against the implementation output.
+A reconfigurable engine needs one further check: if loader and model both
+padded every network to the largest shape, they would agree while the shape
+mechanism went untested. The golden model therefore evaluates each network at
+its true topology, the loader writes the per-layer width registers before each
+run, and the cycle counter records how many iterations the controller issued.
+The four counts in Table~\ref{tab:verification} are distinct and each one cycle
+below the prediction of \eqref{eq:cycles}, the offset being the counting
+convention of Section~\ref{sec:determinism}; a padded network would have
+produced four equal counts. The runs used the bitstream characterized in
+Section~\ref{sec:resources}, compared byte for byte against the boot image.
 
 \begin{table}[htbp]
 \centering
@@ -829,112 +504,37 @@ Total                   & 400{,}000 & 100.0000\% & 100.0000\% & \\
 
 \subsection{Dataset and Classification Task}
 \label{sec:dataset}
-The workload used throughout this paper is a three-way directional
-classification on Binance BTCUSDT aggregated trades. The data are the public
-aggregated-trade archive for the instrument, covering
-\num{16631211} trades between 2025-05-01 00:00 UTC and 2025-05-18 00:44 UTC,
-approximately seventeen days of continuous tick data. Each aggregated trade
-record carries a price, a quantity and a taker-side flag.
+The workload is a three-way directional classification on the public Binance
+BTCUSDT aggregated-trade archive: \num{16631211} trades between 2025-05-01 and
+2025-05-18. The 40 features come from a trailing window of 40 trades and are
+dimensionless: 20 slots of relative price changes scaled by \num{1000} (one of
+which is a constant zero left by zero-padding of the difference series), 10
+quantities divided by the window mean, and 10 taker-side indicators of $\pm 1$.
+Every feature is clipped to $[-5,5]$, so the integer part of $Q8.8$ has more
+than four bits of headroom. With $r_t = (P_{t+50}-P_t)/P_t$, the label is
+\emph{buy} for $r_t > \theta$, \emph{sell} for $r_t < -\theta$ and \emph{hold}
+otherwise, with $\theta = 5\times10^{-5}$; larger thresholds leave the minority
+classes at \SI{5}{\percent} or below \SI{0.1}{\percent}. The split is
+chronological: the final \SI{10}{\percent}, \num{1663113} samples, is held out
+(no embargo was applied; 50 boundary labels overlap the validation period). The
+validation period contains \SI{57.16}{\percent} hold, \SI{21.50}{\percent} buy
+and \SI{21.35}{\percent} sell, so the majority-class baseline is
+\SI{57.16}{\percent}.
 
-The 40 features are derived from a trailing window of 40 trades and are
-dimensionless by construction, which is what makes a $Q8.8$ datapath
-appropriate. They comprise 20 slots holding successive relative price changes scaled by
-\num{1000}, 10 trade quantities each divided by the mean quantity of the same
-window, and 10 taker-side indicators taking the values $+1$ and $-1$. Only 19 of
-the 20 price-change slots carry data; the remaining one is a constant zero,
-retained from an implementation in which the difference series was zero-padded to
-preserve length. It carries no information, and we report it rather than defend
-it as a design choice. Every feature is clipped to $[-5, 5]$, so the integer part of
-$Q8.8$ carries the dynamic range of the input with more than four bits of
-headroom, and the eight fractional bits determine the resolution.
-
-The label is defined on a forward horizon of 50 trades. Writing $P_t$ for the
-price of trade $t$ and
-$r_t = (P_{t+50} - P_t)/P_t$, the class is \emph{buy} for
-$r_t > \theta$, \emph{sell} for $r_t < -\theta$ and \emph{hold} otherwise, with
-$\theta = 5 \times 10^{-5}$. The threshold is a design choice that sets the
-balance of the problem, and it was selected because the two alternatives
-examined, $10^{-4}$ and $2 \times 10^{-4}$, leave the minority classes at
-\SI{5}{\percent} and below \SI{0.1}{\percent} of the validation set
-respectively, at which point the task degenerates into predicting the majority
-class.
-
-The split is temporal and not random: the first \SI{90}{\percent} of the
-chronologically ordered samples are used for training and the final
-\SI{10}{\percent}, \num{1663113} samples, for validation. No sample in the
-validation period is available to the model at training time, so the reported
-figures are not affected by look-ahead leakage. No embargo was applied at the
-boundary, so the labels of the last 50 training samples are formed from prices
-that fall inside the validation period; at 50 samples out of \num{1663113} the
-effect is not measurable, but we note it rather than leave it to be inferred. The validation period contains
-\SI{57.16}{\percent} hold, \SI{21.50}{\percent} buy and \SI{21.35}{\percent}
-sell, which fixes the majority-class baseline at \SI{57.16}{\percent}. That
-figure, and not \SI{33}{\percent}, is the reference against which the accuracies
-below must be read.
-
-\subsection{Model Accuracy and Classification Performance}
-Table~\ref{tab:model_performance} reports, for five trained networks, the
-accuracy in floating point under PyTorch, the accuracy of the same weights
-through the fixed-point datapath, and the margin over the majority-class
-baseline established above.
-
-Two properties of the table are worth separating. The first concerns the
-arithmetic: floating point and $Q8.8$ agree to within 0.22 percentage points
-across all five networks and to within 0.1 percentage points for the reference
-network, so reducing the datapath to 16-bit fixed point does not materially
-change the decisions the network makes. The second concerns the task: the
-reference network exceeds the majority-class baseline by 4.58 percentage points
-on \num{1663113} held-out samples, whereas the two smallest networks do not. At
-this sample size the standard error of a proportion is 0.04 percentage points, so
-the margins of the three larger networks are two orders of magnitude beyond
-sampling noise, while network D's margin of 0.06 points is not distinguishable
-from zero and network E is measurably below the baseline. The classification problem is therefore learnable at this
-feature set but only above a capacity threshold, and we report the two networks
-that fail as readily as the three that succeed, since a table containing only
-the successful configurations would misrepresent how narrow the margin is.
-
-The fixed-point column is computed with a bit-accurate model of the deployed
-datapath rather than by streaming \num{1663113} samples through the board, which
-would take hours over UDP. This is legitimate here for a specific reason:
-Section~\ref{sec:verification} establishes that the hardware and that model
-agree bit for bit, on every decision and on every raw output value, over
-\num{400000} inferences across four topologies. The fixed-point column is
-therefore a hardware result in the sense that matters, and the verification
-section is what licenses reading it that way.
-
-Table~\ref{tab:per_class} gives the per-class behavior of the reference
-network, which the aggregate accuracy conceals. Recall is roughly balanced
-across the three classes, between 0.59 and 0.64, so the network is not simply
-defaulting to the majority class; precision, however, is markedly lower on the
-two minority classes, around 0.51 to 0.57 against 0.70 for hold. In trading
-terms the network identifies most directional moves but pays for it with false
-positives, which is the expected shape for a threshold this small.
-
-Predictive quality is not a contribution of this work, and no claim is made that
-this network would be profitable after transaction costs. It is reported here so
-that the workload the hardware executes is fully specified, and so that the
-fixed-point agreement in Table~\ref{tab:model_performance} is anchored to a task
-whose difficulty the reader can judge.
-
-\begin{table}[htbp]
-\centering
-\caption{Per-class performance of the reference network
-($40\!\rightarrow\!64\!\rightarrow\!32\!\rightarrow\!16\!\rightarrow\!3$) on the
-\num{1663113}-sample validation period}
-\label{tab:per_class}
-\small
-\begin{tabular}{@{}lrrrr@{}}
-\toprule
-Class & Share & Recall & Precision & $F_1$ \\
-\midrule
-Hold & 57.16\% & 0.619 & 0.698 & 0.656 \\
-Buy  & 21.50\% & 0.595 & 0.570 & 0.582 \\
-Sell & 21.35\% & 0.637 & 0.506 & 0.564 \\
-\midrule
-Macro average & \ & 0.617 & 0.591 & 0.601 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\subsection{Model Accuracy}
+Table~\ref{tab:model_performance} compares floating-point and $Q8.8$ accuracy
+for five networks. The fixed-point column comes from the bit-accurate model,
+which Section~\ref{sec:verification} shows to agree with the hardware bit for
+bit. Floating point and $Q8.8$ agree to within 0.22 percentage points, and to
+within 0.1 for the reference network, so the 16-bit datapath does not change
+the decisions materially. The reference network exceeds the majority baseline
+by 4.58 points; with a standard error of 0.04 points the three larger networks
+are well above sampling noise, while the two smallest are not distinguishable
+from the baseline (D) or fall below it (E). Recall of the reference network is
+balanced across classes (0.59 to 0.64) and precision is lower on the minority
+classes (0.51 to 0.57 against 0.70 for hold). Predictive quality is not a
+contribution of this work and no profitability is claimed; the task fixes a
+realistic network size and input rate.
 
 \begin{table}[htbp]
 \centering
@@ -962,36 +562,26 @@ E & 40-10-16-8-3     & 56.86 & 57.01 & 0.15 & $-0.30$ \\
 \section{Latency and Determinism}
 \label{sec:latency}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 \subsection{System-Level Packet-to-Decision Latency}
-Table~\ref{tab:latency_metrics} reports the measured end-to-end
-packet-to-decision latency of the full FPGA system from a native Linux host,
-over \num{100000} requests for each of the four networks, all deployed into the
-same bitstream in one session. Each request is a UDP round trip from the host to
-the board and back, so it includes the network, the PS software, the AXI-DMA
-transfer, and the PL core. For the reference network the median is
-\SI{66.9}{\micro\second}; the pure hardware core (\SI{768}{\nano\second}) is
-therefore about \SI{1}{\percent} of the end-to-end time, confirming that the
-remaining cost is dominated by the operating system, the network, and the PS
-software rather than by the inference itself.
+Table~\ref{tab:latency_metrics} reports the UDP round trip from a native Linux
+host for all four networks in one bitstream and one session. For the reference
+network the median is \SI{66.9}{\micro\second}, of which the
+\SI{768}{\nano\second} core is about \SI{1}{\percent}.
 
-The four columns differ on the board only where the architecture says they
-should. The median on-board subtotal rises from \SI{9.48}{\micro\second} to
-\SI{9.98}{\micro\second} across the four networks, entirely in the PL stage and
-in step with the cycle counts, which the firmware reads at the
-\SI{250}{\nano\second} granularity of its AXI-Lite polling; reception, parsing,
-DMA and readout are identical to within \SI{0.01}{\micro\second}. The end-to-end
-medians of the three larger networks lie within \SI{0.7}{\micro\second} of one
-another. The smallest network, run first in the session, has a median
-\SI{5}{\micro\second} lower, and the cause is not on the board. Its run places
-\SI{38}{\percent} of requests below \SI{60}{\micro\second}, against
-\SI{3}{\percent} for the other three, and in that fast group the on-board time is
-the same \SI{9.48}{\micro\second} as in the slow group; the whole difference,
-\SI{44.7}{} against \SI{51.8}{\micro\second} of off-board time, is spent in the
-host, its NIC and the wire. We therefore read the lower median as a property of
-the host state during that run, not of the network, and the variation between
-columns as a measure of how much the host alone moves the end-to-end figure
-between runs of a few seconds.
+The columns differ on the board only where the architecture says they should:
+the median on-board subtotal rises from \SI{9.48}{} to \SI{9.98}{\micro\second},
+entirely in the PL stage and in step with the cycle counts, which the firmware
+reads at the \SI{250}{\nano\second} granularity of its AXI-Lite polling.
+Reception, parsing, DMA and readout agree to within \SI{0.01}{\micro\second}.
+The three larger networks have medians within \SI{0.7}{\micro\second} of one
+another; the smallest, run first in the session, is \SI{5}{\micro\second} lower,
+and the cause is not on the board. In that run \SI{38}{\percent} of requests
+finish below \SI{60}{\micro\second}, against \SI{3}{\percent} for the others,
+and in that fast group the on-board time is the same \SI{9.48}{\micro\second}
+as in the slow group; the difference (\SI{44.7}{} against
+\SI{51.8}{\micro\second} off board) lies in the host, its NIC and the wire. The
+spread between columns is therefore a measure of how much the host alone moves
+the end-to-end figure between runs.
 
 \begin{table}[htbp]
 \centering
@@ -1021,165 +611,59 @@ Core cycles & 69 & 76 & 95 & 111 \\
 
 \subsection{How Much of the End-to-End Latency Belongs to the Host}
 \label{sec:osbaseline}
-The same UDP round-trip run was repeated from a Windows host with the board, the
-bitstream and the four networks held fixed, which bounds how much of the
-end-to-end figure is determined by software outside the board. For the
-reference network the Linux host completes a median request in
-\SI{66.9}{\micro\second} (p99 \SI{80.9}{\micro\second}, p99.9
-\SI{113.6}{\micro\second}); the Windows host needs \SI{460.0}{\micro\second}
-(p99 \SI{656.0}{\micro\second}, p99.9 \SI{1878}{\micro\second}), and 255 of its
-\num{100000} requests exceed \SI{1}{\milli\second}, against 30 on Linux. The
-Windows medians of the four networks lie between \SI{456.1}{} and
-\SI{461.0}{\micro\second}, so on that host the network shape is not visible in
-the end-to-end figure at all. A factor of roughly seven in the median, and the
-entire heavy tail, therefore originates on the host side of the link rather than
-in the accelerator. This is also why the end-to-end figures in
-Table~\ref{tab:latency_metrics} should not be read as a property of the core.
-This experiment is not a software baseline for the inference itself, since the
-network is executed in the fabric in both runs; that comparison is given in
+The same runs were repeated from a Windows host with board, bitstream and
+networks unchanged (Fig.~\ref{fig:lat_cdf}). For the reference network Linux
+completes a median request in \SI{66.9}{\micro\second} (p99
+\SI{80.9}{\micro\second}, p99.9 \SI{113.6}{\micro\second}); Windows needs
+\SI{460.0}{\micro\second} (p99 \SI{656.0}{\micro\second}, p99.9
+\SI{1878}{\micro\second}), and 255 of its \num{100000} requests exceed
+\SI{1}{\milli\second}, against 30 on Linux. The Windows medians of the four
+networks lie between \SI{456.1}{} and \SI{461.0}{\micro\second}, so the network
+shape is invisible there. A factor of about seven in the median, and the whole
+heavy tail, originate on the host side. This is not a software baseline for the
+inference, which runs in the fabric in both cases; that comparison is in
 Section~\ref{sec:arm_baseline}.
 
-\subsection{Latency Breakdown}
-Because each layer exposes a done pulse, the inference can be decomposed on real
-hardware. Probing the debug pins with an oscilloscope yields the per-layer
-inter-pulse times of Fig.~\ref{fig:scope_layer} and the total
-input-to-final-done interval of Fig.~\ref{fig:scope_total}.
-Table~\ref{tab:cycle_breakdown} converts these to clock cycles at
-\SI{125}{\mega\hertz}. The measured per-layer times are 280, 200, 160,
-and \SI{118}{\nano\second} for layers 1 to 4, and the measured end-to-end core
-interval is \SI{768}{\nano\second}.
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/lat_cdf_os.pdf}
+\caption{Cumulative distribution of the end-to-end latency for the reference
+network, \num{100000} requests per host, same board, bitstream and model.}
+\label{fig:lat_cdf}
+\end{figure}
 
-These values are not merely observed; they follow from the architecture. The
-issue FSM emits one token per cycle while a layer is being issued, and each
-token carries three neurons, so a layer of $n_\ell$ outputs occupies
-$\lceil n_\ell/3 \rceil$ issue cycles. The FSM then waits for the pipeline to
-empty before advancing, which costs the full pipeline depth. The per-layer
-occupancy is therefore
-%
+\subsection{Core Latency and Cycle Model}
+The per-layer done pulses give the inter-pulse times of
+Fig.~\ref{fig:scope_layer} and the total interval of Fig.~\ref{fig:scope_total}:
+280, 200, 160 and \SI{118}{\nano\second} for layers 1 to 4, and
+\SI{768}{\nano\second} in total. These values follow from the architecture. The
+issue FSM emits one token of three neurons per cycle, so a layer of $n_\ell$
+outputs needs $\lceil n_\ell/3\rceil$ issue cycles, and then waits for the
+pipeline to empty:
 \begin{equation}
 c_\ell \;=\; \left\lceil \frac{n_\ell}{3} \right\rceil + D + 1,
-\qquad D = 13,
+\qquad D = 13.
 \label{eq:cycles}
 \end{equation}
-%
-where $D$ is the depth of the token pipeline. Analytic latency models of this
-kind are also used to steer design-space exploration for systolic
-accelerators, where they have been validated against FPGA measurements to
-within about one percent~\cite{Gutermann2026}; for a single-issue
-pipeline without data-dependent control the model can be exact.
-Table~\ref{tab:cycle_breakdown}
-compares this prediction with the oscilloscope measurement. The predicted total,
-$\sum_\ell c_\ell = 96$ cycles or \SI{768}{\nano\second}, agrees exactly with
-the measured input-to-done interval. Two of the four individual intervals read
-slightly below the prediction, layer~1 at \SI{280}{\nano\second} against a
-predicted \SI{288}{\nano\second} and layer~4 at \SI{118}{\nano\second} against
-\SI{120}{\nano\second}, so the four inter-pulse intervals sum to
-\SI{758}{\nano\second} where the interval measured directly between the first
-and last pulse is \SI{768}{\nano\second}. Both deviations are in the same
-direction and neither exceeds one clock period. The per-layer figures come from
-four separate captures in which one clock period occupies a small fraction of a
-division, and a spread of \SI{10}{\nano\second} accumulated over four such
-readings is consistent with that reading uncertainty. We therefore treat the
-total, which is corroborated independently by the cycle counter of
-Section~\ref{sec:determinism}, as the authoritative figure, and the per-layer
-captures as confirming the model to within one cycle. Latching a counter at
-each \texttt{layer\_done} would remove the ambiguity entirely and is the
-appropriate instrument for per-layer timing at this resolution.
+Analytic models of this kind steer design-space exploration for systolic
+accelerators to within about one percent~\cite{Gutermann2026}; for a
+single-issue pipeline without data-dependent control the model can be exact.
+The predicted total, 96 cycles or \SI{768}{\nano\second}, equals the measured
+interval (Table~\ref{tab:cycle_breakdown}). Two per-layer readings are below the
+prediction by less than one clock period, consistent with the reading
+uncertainty of separate captures; the total is corroborated independently by
+the cycle counter (Section~\ref{sec:determinism}).
 
-We note that the drain term in \eqref{eq:cycles} is not negligible: of the 96
-cycles, 56 are spent draining the pipeline between layers rather than issuing
-work, so only \SI{42}{\percent} of the core latency performs useful issue. This is a direct consequence of the ping-pong buffering, since a layer
-cannot begin reading a buffer until the preceding layer has finished writing it.
-For the narrow output layers the effect is pronounced: layer~4 issues a
-single token and then drains for 13 cycles. Overlapping the drain of one layer
-with the issue of the next would require double-buffering the activations at
-sub-layer granularity and is left as future work; at the present operating point
-the core latency is in any case a small fraction of the end-to-end path.
-
-\subsubsection{Arithmetic Efficiency}
-The consequences for throughput are worth stating explicitly, since related work
-is frequently compared on this basis. With 192 multipliers at
-\SI{125}{\mega\hertz} the peak arithmetic rate is \SI{48}{GOP/s}. A single
-inference of the reference network performs $40\!\times\!64 + 64\!\times\!32 +
-32\!\times\!16 + 16\!\times\!3 = 5168$ useful multiply-accumulate operations,
-but the zero-padded SIMD array issues 7680 multiplications, so
-\SI{67}{\percent} of the issued arithmetic is useful. Combined with the drain
-overhead, the achieved rate is $2 \times 5168 / \SI{768}{\nano\second} \approx
-\SI{13.5}{GOP/s}$, or \SI{28}{\percent} of peak. The core sustains
-\SI{1.30}{M} inferences per second; at system level the AXI-Stream wrapper does
-not overlap the reception of one feature vector with the computation of the
-previous one, which reduces the sustained rate to approximately
-\SI{0.77}{M} inferences per second. Both figures are far in excess of what the
-host-side path can supply (Section~\ref{sec:latency}), which is why the design is
-latency-optimized rather than throughput-optimized.
-
-\subsubsection{Per-Stage Breakdown of the End-to-End Path}
-The full end-to-end path was then instrumented with PS-side timestamps over
-1{,}004{,}229 packets (Table~\ref{tab:latency_breakdown}). The result isolates
-where the time is spent: of the \SI{68.6}{\micro\second} mean host-to-decision
-latency, only \SI{14.4}{\micro\second} is spent on the board (PS + PL), and the
-remaining \SI{54}{\micro\second} is host-side NIC, operating-system, and wire
-time. On the board, the Ethernet reception (EMAC + lwIP) dominates and is
-bimodal (p50 \SI{2.6}{\micro\second} vs p99 \SI{14.2}{\micro\second}), reflecting
-the phase of the polling loop relative to packet arrival, whereas the DMA,
-PL compute, and readout stages are tightly bounded (sub-microsecond to a few
-microseconds, with p99 within a few percent of the median). The PL stage
-should be read as the interval seen by the processor rather than as the core
-latency: it ends when a polling read of the AXI-Lite status register first
-observes \texttt{done}, and one such read takes about \SI{250}{\nano\second}, so
-the stage is resolved in steps of that size and also contains the AXI-Stream
-transfer. The core latency itself is given by the cycle counter and the debug
-pins. This confirms the
-central claim: the deterministic hardware core is a negligible and jitter-free
-fraction of the end-to-end latency, and the remaining cost is host- and
-network-side software, which a hardware Ethernet MAC in the PL would remove.
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.49\linewidth]{figures/scope_layer1.png}\hfill
-\includegraphics[width=0.49\linewidth]{figures/scope_layer2.png}\\[3pt]
-\includegraphics[width=0.49\linewidth]{figures/scope_layer3.png}\hfill
-\includegraphics[width=0.49\linewidth]{figures/scope_layer4.png}
-\caption{Oscilloscope captures of consecutive layer-done debug pulses; each
-inter-pulse interval directly measures one layer's processing time. Top-left to
-bottom-right: layer~1 (\SI{280}{\nano\second}), layer~2
-(\SI{200}{\nano\second}), layer~3 (\SI{160}{\nano\second}), layer~4
-(\SI{118}{\nano\second}).}
-\label{fig:scope_layer}
-\end{figure}
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=\linewidth]{figures/scope_total.png}
-\caption{Oscilloscope capture of the first and last debug pulses of an
-inference, measuring the total hardware-core interval
-($\Delta t = \SI{768}{\nano\second}$).}
-\label{fig:scope_total}
-\end{figure}
-
-\begin{table*}[t]
-\centering
-\caption{Latency breakdown from Ethernet packet to trading decision, over a
-1{,}004{,}229-packet run (all values in $\mu$s). Percentiles on the subtotal row
-are computed over the per-packet sums, not by adding the per-stage percentiles;
-the two differ because a packet slow in one stage is not in general slow in the
-others (adding the per-stage p99 values would give 21.51 rather than 21.03).}
-\label{tab:latency_breakdown}
-\begin{tabular}{p{4.6cm} p{1.5cm} p{2.4cm} p{4.4cm}}
-\toprule
-Stage & Mean & p50 / p99 & Measurement Method \\
-\midrule
-Ethernet packet reception (EMAC + lwIP) & 7.59 & 2.57 / 14.18 & PS timestamping (bimodal) \\
-Packet parsing and buffer hand-off & 0.70 & 0.69 / 0.86 & PS timestamping \\
-AXI-DMA transfer to PL & 3.70 & 3.70 / 3.78 & PS/PL counters \\
-AXI-Stream receive + MLP core (PL) & 1.46 & 1.46 / 1.72 & \texttt{dbg} pins (core \SI{768}{\nano\second}) \\
-Result readout & 0.96 & 0.96 / 0.97 & AXI-Lite \\
-\midrule
-Board subtotal (PS + PL) & 14.40 & 9.41 / 21.03 & On-board sum \\
-Host end-to-end & 68.56 & 68.50 / 80.92 & Host round trip \\
-\bottomrule
-\end{tabular}
-\end{table*}
+Of the 96 cycles, 56 drain the pipeline between layers, so only
+\SI{42}{\percent} of the core latency issues work; overlapping drain and issue
+would need sub-layer double buffering and is left as future work. With 192
+multipliers at \SI{125}{\mega\hertz} the peak is \SI{48}{GOP/s}; the reference
+network performs 5168 useful multiply-accumulates while the zero-padded array
+issues 7680, so the achieved rate is $2\times5168/\SI{768}{\nano\second}\approx
+\SI{13.5}{GOP/s}$, \SI{28}{\percent} of peak. The core sustains \SI{1.30}{M}
+inferences per second, and the system about \SI{0.77}{M} because the wrapper
+does not overlap reception with computation; both far exceed what the host
+path supplies.
 
 \begin{table}[htbp]
 \centering
@@ -1206,228 +690,132 @@ Total & \ & \ & 96 & 768 & 768 \\
 \end{tabular}
 \end{table}
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.49\linewidth]{figures/scope_layer1.png}\hfill
+\includegraphics[width=0.49\linewidth]{figures/scope_layer2.png}\\[3pt]
+\includegraphics[width=0.49\linewidth]{figures/scope_layer3.png}\hfill
+\includegraphics[width=0.49\linewidth]{figures/scope_layer4.png}
+\caption{Oscilloscope captures of consecutive layer-done debug pulses; each
+inter-pulse interval directly measures one layer's processing time. Top-left to
+bottom-right: layer~1 (\SI{280}{\nano\second}), layer~2
+(\SI{200}{\nano\second}), layer~3 (\SI{160}{\nano\second}), layer~4
+(\SI{118}{\nano\second}).}
+\label{fig:scope_layer}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{figures/scope_total.png}
+\caption{Oscilloscope capture of the first and last debug pulses of an
+inference, measuring the total hardware-core interval
+($\Delta t = \SI{768}{\nano\second}$).}
+\label{fig:scope_total}
+\end{figure}
+
+\subsection{Per-Stage Breakdown of the End-to-End Path}
+Table~\ref{tab:latency_breakdown} decomposes the path over 1{,}004{,}229 packets.
+Of the \SI{68.6}{\micro\second} mean, \SI{14.4}{\micro\second} is spent on the
+board and the rest in the host NIC, operating system and wire. On the board,
+Ethernet reception dominates and is bimodal (p50 \SI{2.6}{\micro\second}, p99
+\SI{14.2}{\micro\second}), reflecting the phase of the polling loop, while DMA,
+PL and readout are tightly bounded. The PL stage is the interval seen by the
+processor, resolved in \SI{250}{\nano\second} polling steps and including the
+AXI-Stream transfer; the core latency itself is given by the counter and the
+debug pins.
+
+\begin{table*}[t]
+\centering
+\caption{Latency breakdown from Ethernet packet to trading decision, over a
+1{,}004{,}229-packet run (all values in $\mu$s). Percentiles on the subtotal row
+are computed over the per-packet sums, not by adding the per-stage percentiles;
+the two differ because a packet slow in one stage is not in general slow in the
+others (adding the per-stage p99 values would give 21.51 rather than 21.03).}
+\label{tab:latency_breakdown}
+\begin{tabular}{p{4.6cm} p{1.5cm} p{2.4cm} p{4.4cm}}
+\toprule
+Stage & Mean & p50 / p99 & Measurement Method \\
+\midrule
+Ethernet packet reception (EMAC + lwIP) & 7.59 & 2.57 / 14.18 & PS timestamping (bimodal) \\
+Packet parsing and buffer hand-off & 0.70 & 0.69 / 0.86 & PS timestamping \\
+AXI-DMA transfer to PL & 3.70 & 3.70 / 3.78 & PS/PL counters \\
+AXI-Stream receive + MLP core (PL) & 1.46 & 1.46 / 1.72 & \texttt{dbg} pins (core \SI{768}{\nano\second}) \\
+Result readout & 0.96 & 0.96 / 0.97 & AXI-Lite \\
+\midrule
+Board subtotal (PS + PL) & 14.40 & 9.41 / 21.03 & On-board sum \\
+Host end-to-end & 68.56 & 68.50 / 80.92 & Host round trip \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
 \subsection{Determinism of the Hardware Core}
 \label{sec:determinism}
-The claim that the core is deterministic has so far rested on oscilloscope
-captures, which show one inference at a time and cannot exclude rare outliers.
-To establish it over a population, a 16-bit cycle counter was added to the
-engine. It is cleared when \texttt{start} is accepted, increments on every cycle
-in which the controller is not idle, and is latched when the final layer asserts
-\texttt{done}. The latched value is exposed at AXI-Lite offset \texttt{0x10} and
-read back by the firmware after every inference, so each logged decision carries
-the exact cycle count that produced it.
-
-Over \num{100000} consecutive inferences driven at line rate the counter
-returned 95 on every inference. Minimum, maximum and mean are all 95 and the
-standard deviation is zero; the distribution has a single point of support. The
-core therefore shows no jitter at all rather than a short tail: inference $k$ and
-inference $k+1$ occupy the same number of cycles irrespective of the input
-values, of the activation pattern, or of concurrent AXI-Lite and DMA traffic.
-This is the property the application requires, since a trading system is exposed
-to the worst case and not to the mean.
-
-The counter reads 95 where \eqref{eq:cycles} predicts 96 because the two count
-from different points. The counter increments only in non-idle cycles and is
-latched on the same clock edge that returns the controller to the idle state, so
-it excludes the cycle in which \texttt{start} is sampled; adding that cycle
-gives 96, in agreement with both the analytic model and the
-\SI{768}{\nano\second} interval measured on the debug pins
-(Fig.~\ref{fig:scope_total}). The difference is a property of the instrument
-rather than of the datapath, and the start-to-done convention is used
-throughout.
+Over \num{100000} consecutive inferences at line rate the cycle counter returned
+95 every time: minimum, maximum and mean are equal and the standard deviation is
+zero, irrespective of the input values, the activation pattern and concurrent
+AXI-Lite and DMA traffic. The counter reads 95 where \eqref{eq:cycles} predicts
+96 because it counts only non-idle cycles and so excludes the cycle in which
+\texttt{start} is sampled; the start-to-done convention is used throughout.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Baselines on the Same Device}
 \label{sec:baselines}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 \subsection{Sequential Hardware Baseline}
 \label{sec:baseline}
-The oscilloscope measurements establish that the hardware inference completes in
-\SI{768}{\nano\second}, deterministically. Interpreting that number requires a
-baseline, and the comparisons available in the literature are awkward: the
-figures reported by other accelerators are measured between different points, on
-different devices, for different networks. We therefore use a baseline that
-removes all of these confounds: an earlier version of this same design, on
-the same board, running the same network.
-
-That earlier implementation is preserved in the version history of the artifact
-and can therefore be characterized exactly rather than from recollection. It used
-a sequential finite-state-machine controller driving a single
-multiply-accumulate unit, with the same network dimensions hardwired into the
-controller. Its cycle count follows directly from the state machine: each neuron
-costs one cycle to load its bias, one cycle per input, and three further cycles
-to apply the activation, write the result and advance, so a layer of $n_{\text{out}}$
-neurons with $n_{\text{in}}$ inputs occupies $n_{\text{out}}(n_{\text{in}}+4)$
-cycles. Summed over the four layers, with the layer transitions and the hardware
-argmax included, the design required \num{5639} cycles per inference.
-
-The comparison must be stated carefully, because the two designs did not run at
-the same frequency: the sequential version was clocked at \SI{100}{\mega\hertz},
-giving \SI{56.4}{\micro\second} per inference, whereas the present design closes
-timing at \SI{125}{\mega\hertz}. Two speed-up figures follow, and they answer
-different questions. Evaluated at a common \SI{125}{\mega\hertz} the sequential
-design would require \SI{45.1}{\micro\second}, so the architectural change alone
-accounts for a factor of $58.7$. As actually deployed, \SI{56.4}{\micro\second}
-then against \SI{768}{\nano\second} now, the improvement is a factor of $73.4$,
-of which the remainder is the higher clock. We quote the former where the
-architecture is the subject.
-
-The factor of $58.7$ is a comparison of controller cycle counts, \num{5639}
-against 96, and it is produced by a single mechanism: replacing the single
-multiply-accumulate unit with 192 parallel multipliers removes the
-serialization of the arithmetic, so that the cost no longer scales with the
-\num{5168} multiply-accumulate operations of the network but with the number of
-issue tokens per layer. The earlier design also received its inputs through one
-AXI-Lite write per operand, which the present design replaces with a DMA-fed
-stream; that change shortens the path outside the core, is not contained in
-either cycle count, and therefore contributes nothing to the factor quoted.
-
-This is the most defensible speed-up figure in the paper, because it is derived
-rather than measured under conditions we no longer control: the device, the
-network and the measurement points are identical, the cycle count is recoverable
-from the archived source, and the one confound that remains, the clock, is
-separated out explicitly. The cross-platform comparisons of
-Table~\ref{tab:related_work} deserve correspondingly more caution.
+An earlier version of this design, preserved in the artifact history, used a
+sequential FSM driving a single multiply-accumulate unit with the network
+dimensions hardwired. Each neuron costs one cycle for the bias, one per input
+and three to activate, write and advance, so a layer occupies
+$n_{\text{out}}(n_{\text{in}}+4)$ cycles; with layer transitions and a hardware
+argmax the design required \num{5639} cycles, \SI{56.4}{\micro\second} at its
+\SI{100}{\mega\hertz} clock. At a common \SI{125}{\mega\hertz} it would need
+\SI{45.1}{\micro\second}, so the architecture alone accounts for a factor of
+$58.7$; as deployed the factor is $73.4$, the remainder being the clock. The
+factor compares controller cycle counts, \num{5639} against 96, and comes from
+replacing the single unit with 192 parallel multipliers. The earlier design
+also received its inputs through one AXI-Lite write per operand, which the
+DMA-fed stream replaces; that change is outside both cycle counts and does not
+contribute to the factor.
 
 \subsection{Software Inference on the Cortex-A9}
 \label{sec:arm_baseline}
-The premise of the design is that moving inference off the processor and into
-the fabric is worth the effort, and on this device that premise can be tested
-directly, since the Zynq-7000 carries a \SI{667}{\mega\hertz} dual-core
-Cortex-A9 alongside the fabric. The same network was therefore implemented in C
-and run bare-metal on the PS using the same $Q8.8$ arithmetic as the hardware:
-the same 40-bit accumulation, the same arithmetic right shift, the same
-saturation, the same ReLU and the same argmax rule, with weights converted by
-the same routine, so that the two paths compute identical values and differ only
-in how the arithmetic is scheduled. Latency was measured with the Zynq Global
-Timer over \num{1000} inferences with warm caches and with no network or DMA
-activity inside the measured region. Each inference was additionally timed
-individually so that the distribution, and not only the mean, could be compared
-against the hardware.
-
-The software path requires \SI{52.4}{\micro\second} per inference on average
-against \SI{768}{\nano\second} in the fabric, a factor of $68$. Compilation settings
-matter here and are worth stating explicitly: the identical source built without
-optimization requires \SI{302}{\micro\second}, so a baseline left at the default
-debug settings would have overstated the speed-up by almost a factor of six. The
-figure reported here is compiled at \texttt{-O3} and runs on a single core with
-no operating system. It is scalar code: the inner product is a plain loop over
-16-bit operands and NEON intrinsics were not hand-written. At
-\SI{667}{\mega\hertz} the measured time corresponds to about \num{34900}
-processor cycles for the \num{6704} multiply-accumulate operations the routine
-performs, or 5.2 cycles per operation, which is the cost of an unvectorized
-16-bit loop on an in-order Cortex-A9. A hand-vectorized implementation would narrow the gap; we
-do not estimate by how much, since the rest of this paper reports measured
-rather than assumed quantities, and we record the absence of a NEON baseline as
+The same network was implemented in C and run bare-metal on the
+\SI{667}{\mega\hertz} Cortex-A9 with identical $Q8.8$ arithmetic, timed with the
+Global Timer over \num{1000} inferences with warm caches and no network or DMA
+activity. It requires \SI{52.4}{\micro\second} on average, 68 times the fabric.
+The figure is for scalar \texttt{-O3} code on one core; without optimization the
+same source needs \SI{302}{\micro\second}. It corresponds to about \num{34900}
+cycles for 6704 multiply-accumulates (the first layer is padded to 64 inputs),
+5.2 cycles each; a NEON implementation would narrow the gap and its absence is
 a limitation.
 
-The distributions are more instructive than the means. The software path
-ranges from \SI{51.2}{\micro\second} at the minimum to
-\SI{67.1}{\micro\second} at the maximum, with a median of
-\SI{52.0}{\micro\second} and a 99th percentile of \SI{52.6}{\micro\second}. The
-spread between best and worst case is therefore \SI{15.9}{\micro\second}, which
-is more than twenty times the entire hardware inference, and the gap between the
-median and the 99th percentile alone is \SI{570}{\nano\second}, comparable to
-the whole of it. This is measured bare-metal, on a single core, with warm
-caches, with no operating system and with no network activity, which is to say
-under conditions more favorable than any deployment would provide; the residual
-variation is attributable to memory-system effects that software cannot control.
-The hardware path, by the counter of Section~\ref{sec:determinism}, has no
-spread at all. The comparison is therefore not only that the fabric is
-\num{68} times faster on average, but that its worst case equals its best case
-whereas the processor's worst case exceeds its best by a third of its own
-median.
-
-A smaller observation points the same way. Running the identical routine with
-the trained weights rather than with a synthetic set changes the mean by about
-two percent, because the ReLU comparison is a data-dependent branch. The
-hardware has no counterpart to this: the pipeline evaluates the activation
-unconditionally, so the cycle count cannot depend on the values flowing through
-it.
-
-One further comparison is worth drawing, because it sharpens what the
-contribution actually is. The sequential hardware design of
-Section~\ref{sec:baseline} required \SI{56.4}{\micro\second} as deployed, which
-is slightly slower than optimized software on the same chip's processor. Moving
-the computation into the fabric was therefore not by itself sufficient; a serial
-datapath in logic bought nothing over a serial datapath in software. The gain
-reported here comes from the parallel issue structure, not from the change of
-substrate.
-
-The comparison also has a dimension that latency alone does not express. The
-software path occupies the processor for the whole \SI{52.4}{\micro\second}, and
-during that interval it cannot service the network stack, whereas the hardware
-path returns the processor to its polling loop as soon as the DMA descriptor is
-posted. In a system whose residual latency is dominated by packet reception
-(Table~\ref{tab:latency_breakdown}), that difference compounds.
+The distributions differ more than the means. Software ranges from
+\SI{51.2}{} to \SI{67.1}{\micro\second} (median \SI{52.0}{}, p99
+\SI{52.6}{\micro\second}), a spread more than twenty times the whole hardware
+inference, under conditions more favorable than any deployment; trained weights
+change the mean by about two percent because ReLU is a data-dependent branch.
+The hardware has no spread at all. The sequential hardware baseline, at
+\SI{56.4}{\micro\second}, is slightly slower than optimized software, so the
+gain comes from the parallel issue structure rather than from the change of
+substrate. The software path also occupies the processor for its whole duration,
+whereas the hardware path frees it as soon as the DMA descriptor is posted.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Implementation Results}
 \label{sec:implresults}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 \subsection{FPGA Resource Utilization}
 \label{sec:resources}
-Table~\ref{tab:resource_utilization} reports the post-implementation resource
-usage on the XC7Z020, obtained from the routed checkpoint whose bitstream was
-used for the verification of Section~\ref{sec:verification}. The core is
-DSP-bound (\SI{87.3}{\percent}); logic usage remains low (\SI{27.0}{\percent}
-of LUTs, \SI{10.7}{\percent} of flip-flops), and \SI{70.4}{\percent} of the
-block-RAM tiles are occupied. Of the totals, the inference engine itself
-accounts for \num{13038} LUTs, \num{9316} flip-flops, all 192 DSP slices and
-195 RAMB18 primitives; the remainder is the AXI-DMA, the interconnect and the
-AXI-Lite wrapper.
-
-The block-RAM figure requires interpretation, because it does not indicate that
-the memories are nearly full. As described in Section~\ref{sec:reconfig}, the
-engine instantiates one memory per (neuron-slot, input) pair. Each of these 192
-memories holds 128 words of 16 bits, i.e.\ \SI{2}{kbit} of an 18-kbit primitive.
-The reported occupancy therefore counts \emph{tiles}, not stored data: roughly
-\SI{88}{\percent} of the allocated block-RAM capacity is unused. Any increase in
-the input width or in the number of parallel neurons multiplies the tile count
-directly and exhausts the budget long before depth becomes a constraint.
-
-\subsubsection{Timing}
-All constraints are met at the \SI{125}{\mega\hertz} target
-(\SI{8.000}{\nano\second} period), as summarized in Table~\ref{tab:timing}:
-setup WNS \SI{0.056}{\nano\second}, hold WHS \SI{0.027}{\nano\second}, pulse
-width WPWS \SI{3.020}{\nano\second}, with zero failing endpoints out of
-31{,}890. The corresponding maximum frequency is \SI{125.9}{\mega\hertz}.
-
-For a design whose multipliers are fully pipelined through the DSP input,
-intermediate and output registers, this figure is lower than one would expect,
-and the critical path explains why. The worst path does not lie in the
-arithmetic at all: it runs from a payload register inside the AXI SmartConnect
-to the data input of one of the 192 weight memories, with a data-path delay of
-\SI{7.532}{\nano\second} of which \SI{7.014}{\nano\second}
-(\SI{93.1}{\percent}) is routing and only \SI{0.518}{\nano\second} is logic,
-with no logic level in between. The limiting factor is thus the physical
-distribution of the AXI-Lite write path across a large number of small,
-spatially dispersed memories, which is the same organizational choice
-identified above as the scaling limit. The worst path that starts and ends
-inside the engine has a slack of \SI{0.113}{\nano\second} and has the same
-character: it runs from a write-back register to one of the 64 entries of the
-activation buffer, \SI{91.6}{\percent} of its delay being routing across a
-single LUT. Both paths are fan-out paths that move a value to many dispersed
-destinations; neither passes through the multiply-reduce datapath.
-Consolidating inputs into wider memory words would shorten the first of them and
-raise the achievable frequency, in addition to relaxing the capacity bound; we
-did not pursue it here because \SI{125}{\mega\hertz} is already supplied
-directly by the PS clock generator and the core latency is not the dominant
-term in the end-to-end path (Section~\ref{sec:latency}).
-
-\subsubsection{Power}
-Vivado's vectorless estimate for the implemented design is \SI{2.704}{\watt} of
-total on-chip power (\SI{2.509}{\watt} dynamic, \SI{0.196}{\watt} static) at a
-junction temperature of \SI{56.2}{\celsius}. We emphasize that this is a tool
-estimate obtained by activity propagation rather than a measurement. The
-breakdown in Table~\ref{tab:power} shows that the processing system accounts for
-\SI{1.535}{\watt}, i.e.\ more than half of the total, while the entire
-programmable-logic contribution (clocks, logic, signals, block RAM, DSP and
-I/O) amounts to \SI{0.974}{\watt}. Comparisons against accelerator cards
-should use the latter figure, since those designs do not include an application
-processor in their reported power.
+Table~\ref{tab:resource_utilization} reports post-implementation usage from the
+routed checkpoint whose bitstream was verified in
+Section~\ref{sec:verification}. The design is DSP-bound (\SI{87.3}{\percent});
+LUTs are at \SI{27.0}{\percent}, flip-flops at \SI{10.7}{\percent} and block-RAM
+tiles at \SI{70.4}{\percent}. The engine accounts for \num{13038} LUTs,
+\num{9316} flip-flops, all 192 DSP slices and 195 RAMB18 primitives; the rest is
+DMA, interconnect and wrapper. The block-RAM figure counts tiles, not data: each
+of the 192 weight memories holds only 128 words of 16 bits in an 18-kbit
+primitive, so about \SI{88}{\percent} of the allocated capacity is unused.
 
 \begin{table}[htbp]
 \centering
@@ -1449,6 +837,18 @@ BUFGCTRL          &        1 & 32        &  3.13\% \\
 \end{tabular}
 \end{table}
 
+\subsubsection{Timing}
+All constraints are met at \SI{125}{\mega\hertz} (Table~\ref{tab:timing}):
+setup WNS \SI{0.056}{\nano\second}, hold WHS \SI{0.027}{\nano\second}, no
+failing endpoints, for an $f_{\max}$ of \SI{125.9}{\mega\hertz}. The critical
+path is not arithmetic: it runs from an AXI SmartConnect register to the input
+of one of the 192 weight memories, \SI{93.1}{\percent} of its
+\SI{7.532}{\nano\second} being routing. The worst path inside the engine
+(slack \SI{0.113}{\nano\second}) is likewise a fan-out from a write-back register
+to the activation buffer. Consolidating inputs into wider memory words would
+shorten both; it was not pursued because \SI{125}{\mega\hertz} is supplied
+directly by the PS and the core is not the dominant latency term.
+
 \begin{table}[htbp]
 \centering
 \caption{Post-implementation timing closure at \SI{125}{\mega\hertz}
@@ -1464,6 +864,15 @@ Pulse width (WPWS)& \SI{3.020}{\nano\second} & 0 / 12{,}115 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\subsubsection{Power}
+Vivado's vectorless estimate is \SI{2.704}{\watt} on chip (Table~\ref{tab:power}),
+a tool estimate rather than a measurement. The PS accounts for
+\SI{1.535}{\watt}; the whole programmable-logic contribution is
+\SI{0.974}{\watt}, which is the figure to compare against accelerator cards that
+include no application processor. The ZedBoard's XC7Z020 costs in the low
+hundreds of US dollars, so a deterministic sub-microsecond path for a network of
+this size does not require a data-center part.
 
 \begin{table}[htbp]
 \centering
@@ -1490,106 +899,32 @@ Total on-chip           & \SI{2.704}{\watt} \\
 \end{tabular}
 \end{table}
 
-\subsection{Deployment Cost}
-The platform used here is a Digilent ZedBoard carrying an XC7Z020, a part in the
-low hundreds of US dollars, against the several thousand typical of a
-data-center accelerator card. We deliberately avoid a tabulated cost comparison
-against CPU, GPU and high-end FPGA alternatives, because we have not measured
-this network on those platforms and a table populated with qualitative labels
-would add nothing. What the measurements do support is narrower and can be
-stated directly: a deterministic, sub-microsecond inference path for a network
-of this size does not require a data-center part. As a point of reference,
-SparkNoC~\cite{sparknoc} reaches \SI{337.2}{GOP/s} at about \SI{7.6}{\watt} of
-compute power on an Arria~10 GX1150 card, an order of magnitude more throughput
-than the present design delivers, on hardware of a different class and for a
-throughput-oriented workload rather than single-inference latency.
-
 \subsection{Run-Time Reconfigurability and Scalability}
 \label{sec:reconfig}
-The framework property claimed in Section~\ref{sec:framework} is that a single
-bitstream hosts different networks. This is not a matter of reloading weights
-alone: the per-layer output widths are held in AXI-Lite configuration registers
-that the issue FSM reads to derive its iteration counts, so the \emph{shape} of
-the network is also a run-time parameter.
+The per-layer output widths are AXI-Lite registers that the issue FSM reads to
+derive its iteration counts, so the network shape is a run-time parameter. The
+four networks of Table~\ref{tab:verification}, with first hidden layers from 10
+to 64 neurons, were loaded into the same programmed device and each verified
+bit-exactly, without re-synthesis or bitstream reload. Loading a network takes
+$\sum_\ell\lceil n_\ell/3\rceil \times 3 \times 64$ weight writes plus biases,
+about \num{7800} AXI-Lite transactions for the reference topology.
 
-The verification campaign of Section~\ref{sec:verification} demonstrates this
-directly. The four networks of Table~\ref{tab:verification} have different
-hidden-layer widths, with the first hidden layer ranging from 10 to 64 neurons,
-yet all four were loaded into the same programmed device over AXI-Lite and each
-was verified bit-exactly. No re-synthesis, re-implementation or bitstream
-reload took place between them; loading a network requires
-$\sum_{\ell}\lceil n_\ell/3\rceil \times 3 \times 64$ weight writes plus the
-corresponding biases, which for the reference topology is approximately
-\num{7800} AXI-Lite transactions.
-
-The latency follows the shape rather than the bounds of the datapath. Because
-all 64 inputs of a neuron slot are multiplied in parallel, the input width of a
-layer does not enter the cycle count; only the number of output neurons does,
-through the $\lceil n_\ell/3\rceil$ issue term of \eqref{eq:cycles}. The four
-networks therefore complete in 69, 76, 95 and 111 counted cycles
-(Table~\ref{tab:verification}), i.e.\ \SIrange{560}{896}{\nano\second} start
-to done, and each count was constant over its \num{100000} inferences. The
-price of hosting several shapes in one datapath is visible in the same
-expression: the drain term of $4 \times 14$ cycles is independent of the shape,
-so it is more than half of the latency of the smaller networks, and a network
-much smaller than the bounds gains less than its arithmetic would suggest.
-
-The limits of this reconfigurability should be stated precisely. The datapath is
-elaborated for at most four layers, at most 64 neurons per layer and at most 64
-inputs per layer; these bounds are compile-time constants of the SIMD array and
-of the weight-memory instantiation. Any network within those bounds is hosted
-without re-synthesis; a network exceeding them is not.
-
-Scaling beyond these bounds is limited by memory organization rather than by
-arithmetic. The design instantiates one memory per (neuron-slot, input) pair,
-i.e.\ $\mathrm{PARALLEL\_NEURONS} \times \mathrm{MAX\_INPUTS} = 192$ weight
-memories, each of which stores only 128 words and therefore occupies a small
-fraction of the 18-kbit primitive it is mapped onto. The reported
-\SI{70.4}{\percent} block-RAM occupancy thus reflects the \emph{number} of
-memories rather than their depth: widening the input vector or increasing the
-number of parallel neurons increases the block count proportionally and
-exhausts the budget well before the depth of any individual memory becomes a
-constraint. Packing several inputs per memory word is the natural way to relax
-this limit and is left as future work.
+Because all 64 inputs of a neuron slot are multiplied in parallel, only the
+number of output neurons enters the cycle count, so the four networks complete
+in 69, 76, 95 and 111 counted cycles, \SIrange{560}{896}{\nano\second} start to
+done, each constant over its run. The drain term of $4\times14$ cycles does not
+depend on the shape, so it exceeds half the latency of the smaller networks.
+The datapath is elaborated for at most four layers of at most 64 neurons and 64
+inputs; any network within those bounds is hosted without re-synthesis. Beyond
+them the limit is memory organization rather than arithmetic: one memory per
+(neuron slot, input) pair means that wider inputs or more parallel neurons
+multiply the block count, and packing several inputs per memory word is the
+natural extension.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Comparison with a Compiler-Generated Implementation}
 \label{sec:hls4ml}
-The figures of Table~\ref{tab:related_work} are measured on different devices,
-for different networks and between different points. To place a measured point
-at the compiler-based end of the design space, the four networks of
-Table~\ref{tab:verification} were also generated with hls4ml~1.3.0
-\cite{Schulte2026} for the same part (XC7Z020-1CLG484) at the same
-\SI{8}{\nano\second} target, using Vitis HLS and Vivado 2025.2.
-
-\subsection{Same Arithmetic}
-The hls4ml models were configured to reproduce the arithmetic of the engine
-rather than hls4ml's defaults: weights, biases and activations in
-\texttt{ap\_fixed<16,8>}, accumulation in \texttt{ap\_fixed<40,24>} so that no
-product or partial sum is rounded, and a result type with truncation and
-saturation, which matches the arithmetic shift and 16-bit clamp of the engine.
-Weights were pre-quantized with the same truncating conversion as the on-board
-loader. Before synthesis, the C emulation of each generated model was compared
-with the golden model of Section~\ref{sec:verification} on \num{20000} inputs
-of the verification stimulus: all four networks agreed on every raw output and
-every decision. The comparison is therefore between two implementations of the
-same function, not between a 16-bit design and a narrower one.
-
-\subsection{Design Points}
-hls4ml trades area for latency through the reuse factor (RF), the number of
-multiplications each multiplier performs per inference. Each network was
-generated with the \texttt{Resource} strategy and a parallel interface at
-RF $\in \{8, 16, 32, 64, 128\}$, giving 20 designs. Each was synthesized, and
-every design that fits the device was then placed and routed out of context
-with an \SI{8}{\nano\second} constraint on its clock, which yields a post-route
-worst negative slack and hence an achievable frequency. The synthesis estimate
-of HLS was not used for this purpose: on the small networks the points it
-estimated at \SI{5.75}{\nano\second} routed at about \SI{7.8}{\nano\second},
-and on the large ones the same estimate routed at up to
-\SI{11}{\nano\second}, so an estimate-based comparison would have credited
-hls4ml with timing closure it does not achieve. Table~\ref{tab:hls4ml}
-reports the result.
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{table*}[t]
 \centering
 \caption{hls4ml implementations of the four networks on the XC7Z020 at an
@@ -1635,111 +970,101 @@ This work, all four & -- & 70 / 77 / 96 / 112 & $\geq$ lat. & 192 & 13{,}038 & 1
 \end{tabular}
 \end{table*}
 
-\subsection{Results}
-Only the four designs marked in Table~\ref{tab:hls4ml} close timing at
-\SI{125}{\mega\hertz}, three of hls4ml and the engine. On the two smaller
-networks, hls4ml at RF~8 reaches 456 to \SI{457}{\nano\second} against 560 and
-\SI{616}{\nano\second} for the engine, i.e.\ it is 1.2 to 1.35 times faster,
-at a cost of 84 and 201 DSP slices for a single network; at RF~16 on
-$40$-$32$-$16$-$8$-$3$ the two are within \SI{6}{\percent} of each other. On the
-two larger networks no hls4ml point meets \SI{125}{\mega\hertz}. The designs
-with enough parallelism to compete either exceed the LUT capacity of the device
-(RF~8, and RF~16 for $40$-$64$-$64$-$32$-$3$) or fit but route at 91 to
-\SI{125}{\mega\hertz}. Even when each design is credited with its own
-achievable frequency, the fastest hls4ml implementation of
-$40$-$64$-$32$-$16$-$3$ takes \SI{1026}{\nano\second} against
-\SI{768}{\nano\second}, and the fastest of $40$-$64$-$64$-$32$-$3$ takes
-\SI{1758}{\nano\second} against \SI{896}{\nano\second}.
+\subsection{Method}
+The four networks of Table~\ref{tab:verification} were generated with
+hls4ml~1.3.0~\cite{Schulte2026} for the XC7Z020-1CLG484 at an
+\SI{8}{\nano\second} target, with Vitis HLS and Vivado 2025.2, and configured to
+reproduce the engine's arithmetic: \texttt{ap\_fixed<16,8>} weights, biases and
+activations, \texttt{ap\_fixed<40,24>} accumulation, truncation and saturation
+on the result, and weights pre-quantized by the loader's conversion. On
+\num{20000} stimulus inputs the C emulation of each model agreed with the golden
+model on every raw output. Each network was generated with the
+\texttt{Resource} strategy at reuse factors RF $\in\{8,16,32,64,128\}$, and every
+design that fits the device was placed and routed out of context with an
+\SI{8}{\nano\second} clock constraint. The HLS timing estimate was not used: on
+the small networks points estimated at \SI{5.75}{\nano\second} routed at about
+\SI{7.8}{\nano\second}, and on the large ones at up to \SI{11}{\nano\second}.
 
-Three qualifications apply, and two of them favour hls4ml. First, the hls4ml
-designs were routed out of context, without the processing system, the DMA
-and the interconnect that share the device with the engine, and without clock
-insertion delay; the engine's figures come from the complete system. Second,
-hls4ml pipelines successive inferences, accepting a new input every II cycles,
-so its throughput exceeds that of the engine by a large factor. The engine
-cannot overlap inferences in this way, because the same 192 DSP slices
-evaluate every layer in turn: a second input can enter only once the first has
-left the last layer. hls4ml obtains the overlap by giving each layer its own
-multipliers, which is what its DSP counts in Table~\ref{tab:hls4ml} pay for.
-For the single-inference latency that this application is exposed to, the
-overlap does not help, and the throughput gap does not reach the system: even
-the engine's \SI{1.30}{M} inferences per second is roughly two orders of
-magnitude above the \num{11000} to \num{12400} requests per second that the
-Linux host sustained in the runs of Table~\ref{tab:latency_metrics}, with one
-request in flight at a time. Third, each hls4ml row is a separate bitstream for one network with its
-weights compiled into the logic, so moving between the networks of
-Table~\ref{tab:hls4ml}, or retraining any of them, requires a new synthesis and
-place-and-route run, which took from a few minutes to over half an hour per
-point here. The
-engine runs all four from one bitstream, at a fixed 192 DSP slices, and
-changes network with AXI-Lite writes.
+\subsection{Results}
+Table~\ref{tab:hls4ml} and Fig.~\ref{fig:hls4ml} report the result. Only four
+designs close timing at \SI{125}{\mega\hertz}: three of hls4ml and the engine.
+On the two smaller networks hls4ml at RF~8 reaches 456 to \SI{457}{\nano\second}
+against 560 and \SI{616}{\nano\second}, 1.2 to 1.35 times faster, at a cost of 84
+and 201 DSP slices for a single network. On the two larger networks no hls4ml
+point meets \SI{125}{\mega\hertz}: the designs with enough parallelism exceed
+the LUT capacity or route at 91 to \SI{125}{\mega\hertz}, and even at its own
+$f_{\max}$ the fastest hls4ml design takes \SI{1026}{\nano\second} against
+\SI{768}{\nano\second} for 40-64-32-16-3 and \SI{1758}{\nano\second} against
+\SI{896}{\nano\second} for 40-64-64-32-3.
+
+Three qualifications apply, two in hls4ml's favor. The hls4ml designs were routed
+out of context, without the PS, DMA and interconnect that share the device with
+the engine. hls4ml pipelines successive inferences every II cycles by giving each
+layer its own multipliers, so its throughput is far higher; the engine cannot
+overlap inferences because the same 192 multipliers evaluate every layer in
+turn. For single-inference latency this does not help, and even the engine's
+\SI{1.30}{M} inferences per second is two orders of magnitude above the
+\num{11000} to \num{12400} requests per second that the Linux host sustained with
+one request in flight. Finally, each hls4ml row is a separate bitstream with its
+weights compiled in, so changing or retraining a network costs a new synthesis
+and place-and-route run, from a few minutes to over half an hour per point here,
+whereas the engine runs all four networks from one bitstream at a fixed 192 DSP
+slices.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/hls4ml_points.pdf}
+\caption{hls4ml design points (RF 8 to 128) against the engine (stars) for the
+four networks. Filled markers close timing at \SI{125}{\mega\hertz}; latency is
+taken at each design's own $f_{\max}$. Designs that exceed the device are
+omitted.}
+\label{fig:hls4ml}
+\end{figure}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Discussion}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 The results support four observations. First, embedding the network in the PL
-makes the core latency a property of the pipeline rather than of the operating
-system: the measured core latency is \SI{768}{\nano\second} and deterministic,
-whereas the end-to-end host path around it varies from \SI{66}{} to
-\SI{460}{\micro\second} in median across operating systems and shows heavy tails. Second, $Q8.8$ quantization is essentially
-accuracy-neutral here (at most 0.22 percentage points across five models), so
-the speed-up does not cost predictive quality. Third, the design fits a low-cost Zynq-7000 at \SI{2.70}{\watt} with
-positive timing slack, so the approach does not depend on premium accelerator
-hardware. Fourth, run-time shape does not cost latency against a compiler that
-specializes the hardware to each network: on the device used here, hls4ml is
-faster only on the two smaller networks and only at its highest-parallelism
-points, while on the two larger networks the engine is 1.3 to 2.0 times faster
-than the fastest hls4ml design that fits (Section~\ref{sec:hls4ml}). What the
-specialization does buy is throughput, through inference-level pipelining that
-the engine does not implement. The instrumented per-stage breakdown
-(Table~\ref{tab:latency_breakdown}) further shows that only
-\SI{14.4}{\micro\second} of the \SI{68.6}{\micro\second} end-to-end latency is
-spent on the board, so the main remaining limitation is the host- and
-network-side software path; moving the Ethernet stack into the PL is the clearest
-next step.
+makes the core latency a property of the pipeline: \SI{768}{\nano\second} with
+no spread, while the host path around it varies from \SI{67}{} to
+\SI{460}{\micro\second} in median across operating systems. Second, $Q8.8$ is
+essentially accuracy-neutral here (at most 0.22 points across five models).
+Third, the design fits a low-cost Zynq-7000 at an estimated \SI{2.70}{\watt}
+with positive slack. Fourth, run-time shape does not cost latency against a
+compiler that specializes the hardware: hls4ml is faster only on the two smaller
+networks at its most parallel points, while on the two larger networks the
+engine is 1.3 to 2.0 times faster than the fastest hls4ml design that fits.
+Specialization buys throughput, through inference-level pipelining that the
+engine does not implement.
+
+The limitations are equally concrete. Only \SI{14.4}{\micro\second} of the
+\SI{68.6}{\micro\second} end-to-end latency is on the board, and the features are
+computed on the host, so the system as measured is not a complete trading path.
+The power figure is an estimate, the software baseline is scalar, and the
+evaluation uses one device and one task.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Conclusion}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-We presented an Ethernet-fed MLP inference framework embedded in the
-programmable logic of a low-cost Zynq-7000 SoC. Feature vectors are streamed to
-the PL over AXI-DMA, and a 192-multiplier, 13-stage pipelined core performs the
-$Q8.8$ inference in \SI{768}{\nano\second} with deterministic timing, using
+We presented an Ethernet-fed MLP inference engine in the programmable logic of a
+low-cost Zynq-7000. A 192-multiplier, 13-stage pipelined core performs a $Q8.8$
+inference in \SI{768}{\nano\second} with zero timing variance, using
 \SI{27.0}{\percent} of the LUTs and \SI{87.3}{\percent} of the DSP slices of an
-XC7Z020 at an estimated \SI{2.70}{\watt} of total on-chip power, of which
-\SI{0.97}{\watt} is attributable to the programmable logic. The same network
-executed bare-metal on the SoC's own Cortex-A9 requires
-\SI{52.4}{\micro\second}, so moving the computation into the fabric is worth a
-factor of $68$ against an independent baseline on identical arithmetic
-(Section~\ref{sec:arm_baseline}). Decomposed against an earlier sequential
-implementation of the same network on the same device, the architecture accounts
-for a factor of $58.7$ at a common clock, and $73.4$ as the two were actually
-deployed (Section~\ref{sec:baseline}).
+XC7Z020 at an estimated \SI{2.70}{\watt}, \SI{0.97}{\watt} of it in the PL. The
+same network on the SoC's Cortex-A9 needs \SI{52.4}{\micro\second}, a factor of
+68 on identical arithmetic, and the architecture accounts for a factor of
+$58.7$ over an earlier sequential design at a common clock. The network shape is
+a run-time parameter: four topologies ran in one unchanged bitstream, each at
+its own cycle count, and against hls4ml on the same device, clock and arithmetic
+this costs no single-inference latency on the larger networks, where no hls4ml
+design closes timing at \SI{125}{\mega\hertz}. Correctness was established
+bit-exactly over 400{,}000 inferences after directed simulation had exposed three
+pipeline-alignment defects.
 
-The property that distinguishes the design from compiler-style FPGA inference
-frameworks is that the network shape is a run-time rather than an
-elaboration-time parameter: four networks with different hidden-layer widths
-were deployed into one unchanged bitstream over AXI-Lite, with no synthesis step
-between them, and the cycle counter confirms that each ran at its own shape.
-Against hls4ml implementations of the same four networks on the same device,
-clock and arithmetic, this flexibility does not cost single-inference latency on
-the larger networks, where no hls4ml design closes timing at
-\SI{125}{\mega\hertz}.
-Correctness of the deployed arithmetic is not assumed but established: the core
-was verified bit-exactly against an independent reference model over 400{,}000
-inferences, a process that first exposed and then eliminated three
-pipeline-alignment defects that neither synthesis nor end-to-end testing had
-revealed.
-
-Two directions follow from the measured breakdown. First, only
-\SI{14.4}{\micro\second} of the \SI{68.6}{\micro\second} end-to-end latency is
-spent on the board, so integrating an Ethernet MAC directly in the programmable
-logic, and thereby removing the host network stack from the path, is the change
-with the largest remaining effect. Second, the present bounds on network shape
-(at most four layers of at most 64 neurons and 64 inputs) follow from the
-one-memory-per-input organization of the weight storage rather than from the
-arithmetic; packing several inputs per memory word would relax them without
-additional DSP cost.
+Two directions follow. Integrating an Ethernet MAC in the PL would remove the
+host network stack from the dominant part of the path. Packing several inputs per
+memory word would relax the present bounds of four layers of 64 neurons and 64
+inputs without additional DSP cost.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % ELSEVIER ZORUNLU BEYANLARI
