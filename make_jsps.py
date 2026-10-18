@@ -202,9 +202,6 @@ def main():
         # \endgroup); bu yuzden kutu yerine sabit sutunlari %10 daralt.
         tab = body[a:b]
         pre = body[pos:a]
-        # Dogrulama tablosu (5 sayisal sutun) sutuna 8 pt tasiyor: bir punto kucult.
-        if r"\label{tab:verification}" in body[m.end():a]:
-            pre = pre.replace(r"\small", r"\footnotesize")
         # Karsilastirma tablosu iki sutun genisliginde bos kaliyor: sutunlari ac.
         if r"\label{tab:related_work}" in body[m.end():a]:
             tab = re.sub(r"([pL])\{([\d.]+)cm\}",

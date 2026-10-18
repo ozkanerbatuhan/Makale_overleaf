@@ -453,17 +453,19 @@ inference, i.e.\ 1{,}200{,}000 individual comparisons in total, none of which
 differed. ``Cycles'' is the on-chip counter value, identical on every inference
 of a run and equal to $\sum_\ell \lceil n_\ell/3\rceil + 55$.}
 \label{tab:verification}
-\footnotesize
+\small
 \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrrr@{}}
 \toprule
+ & & \multicolumn{2}{c}{Mismatches} & \\
+\cmidrule(lr){3-4}
 Network & Inferences & Decision & Outputs & Cycles \\
 \midrule
-$40$-$64$-$32$-$16$-$3$ & 100{,}000 & 100.0000\% & 100.0000\% & 95 \\
-$40$-$64$-$64$-$32$-$3$ & 100{,}000 & 100.0000\% & 100.0000\% & 111 \\
-$40$-$32$-$16$-$8$-$3$  & 100{,}000 & 100.0000\% & 100.0000\% & 76 \\
-$40$-$10$-$16$-$8$-$3$  & 100{,}000 & 100.0000\% & 100.0000\% & 69 \\
+$40$-$64$-$32$-$16$-$3$ & 100{,}000 & 0 & 0 & 95 \\
+$40$-$64$-$64$-$32$-$3$ & 100{,}000 & 0 & 0 & 111 \\
+$40$-$32$-$16$-$8$-$3$  & 100{,}000 & 0 & 0 & 76 \\
+$40$-$10$-$16$-$8$-$3$  & 100{,}000 & 0 & 0 & 69 \\
 \midrule
-Total                   & 400{,}000 & 100.0000\% & 100.0000\% & \\
+Total                   & 400{,}000 & 0 & 0 & \\
 \bottomrule
 \end{tabular*}
 \end{table}
@@ -590,13 +592,13 @@ heavy tail, originate on the host side. This is not a software baseline for the
 inference, which runs in the fabric in both cases; that comparison is in
 Section~\ref{sec:arm_baseline}.
 
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
-\includegraphics[width=\linewidth]{lat_cdf_os.pdf}
+\includegraphics[width=\textwidth]{lat_cdf_os.pdf}
 \caption{Cumulative distribution of the end-to-end latency for the reference
 network, \num{100000} requests per host, same board, bitstream and model.}
 \label{fig:lat_cdf}
-\end{figure}
+\end{figure*}
 
 \subsection{Core Latency and Cycle Model}
 The per-layer done pulses give the inter-pulse times of
@@ -656,28 +658,28 @@ Total & \ & \ & 96 & 768 & 768 \\
 \end{tabular*}
 \end{table}
 
-\begin{figure}[htbp]
+\begin{figure*}[t]
 \centering
-\includegraphics[width=0.49\linewidth]{scope_layer1.png}\hfill
-\includegraphics[width=0.49\linewidth]{scope_layer2.png}\\[3pt]
-\includegraphics[width=0.49\linewidth]{scope_layer3.png}\hfill
-\includegraphics[width=0.49\linewidth]{scope_layer4.png}
+\includegraphics[width=0.49\textwidth]{scope_layer1.png}\hfill
+\includegraphics[width=0.49\textwidth]{scope_layer2.png}\\[3pt]
+\includegraphics[width=0.49\textwidth]{scope_layer3.png}\hfill
+\includegraphics[width=0.49\textwidth]{scope_layer4.png}
 \caption{Oscilloscope captures of consecutive layer-done debug pulses; each
 inter-pulse interval directly measures one layer's processing time. Top-left to
 bottom-right: layer~1 (\SI{280}{\nano\second}), layer~2
 (\SI{200}{\nano\second}), layer~3 (\SI{160}{\nano\second}), layer~4
 (\SI{118}{\nano\second}).}
 \label{fig:scope_layer}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[htbp]
+\begin{figure*}[t]
 \centering
-\includegraphics[width=\linewidth]{scope_total.png}
+\includegraphics[width=0.8\textwidth]{scope_total.png}
 \caption{Oscilloscope capture of the first and last debug pulses of an
 inference, measuring the total hardware-core interval
 ($\Delta t = \SI{768}{\nano\second}$).}
 \label{fig:scope_total}
-\end{figure}
+\end{figure*}
 
 \subsection{Per-Stage Breakdown of the End-to-End Path}
 Table~\ref{tab:latency_breakdown} decomposes the path over 1{,}004{,}229 packets.
@@ -977,15 +979,16 @@ and place-and-route run, from a few minutes to over half an hour per point here,
 whereas the engine runs all four networks from one bitstream at a fixed 192 DSP
 slices.
 
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
-\includegraphics[width=\linewidth]{hls4ml_points.pdf}
-\caption{hls4ml design points (RF 8 to 128) against the engine (stars) for the
-four networks. Filled markers close timing at \SI{125}{\mega\hertz}; latency is
-taken at each design's own $f_{\max}$. Designs that exceed the device are
-omitted.}
+\includegraphics[width=\textwidth]{hls4ml_points.pdf}
+\caption{hls4ml design points (RF 8 to 128) against the engine, one panel per
+network. Each hls4ml point is a separate bitstream; the engine (square) runs all
+four networks from one bitstream at 192 DSP slices. Filled hls4ml markers
+close timing at \SI{125}{\mega\hertz}; latency is taken at each design's own
+$f_{\max}$. Designs that exceed the device are omitted.}
 \label{fig:hls4ml}
-\end{figure}
+\end{figure*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Discussion}
