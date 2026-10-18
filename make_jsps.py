@@ -25,9 +25,7 @@ BIOS = [
     ("bio_ozkaner.jpg", r"Ahmet Batuhan \"Ozkaner",
      r"""received the B.Sc. degree in energy systems engineering in 2025 and the
 B.Sc. degree in electrical and electronics engineering (double major) in 2026,
-both from \.Istanbul Bilgi University, \.Istanbul, T\"urkiye. Since 2026,
-\"Ozkaner has been an electrical design engineer at R\"onesans Holding,
-\.Istanbul. Research interests include FPGA-based digital design,
+both from \.Istanbul Bilgi University, \.Istanbul, T\"urkiye. Research interests include FPGA-based digital design,
 low-latency hardware acceleration of neural network inference, and embedded
 systems."""),
     # TASLAK: Alper'in CV'si gelince doldurulacak.
@@ -96,6 +94,7 @@ PREAMBLE = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{siunitx}
+\sisetup{group-separator={,}}
 
 % sn-jnl hyperref'i kendisi yukler.
 \hypersetup{hidelinks}

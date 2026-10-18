@@ -20,6 +20,7 @@
 \usepackage{xcolor}
 \usepackage{textcomp}
 \usepackage{siunitx}
+\sisetup{group-separator={,}}
 \usepackage{url}
 \usepackage[hidelinks]{hyperref}
 
@@ -179,7 +180,7 @@ Leber et al.~\cite{Leber2011} moved market-data feed handling and order
 generation into an FPGA and reported wire-to-wire latencies roughly an order of
 magnitude below a tuned software path; Lockwood and Monga~\cite{Lockwood2015}
 pursued the same argument at data-center scale. Puranik et
-al.~\cite{Puranik2023} synthesised an order-processing back end through
+al.~\cite{Puranik2023} implemented an order-processing back end through
 high-level synthesis at roughly \SI{500}{\nano\second} per order, and Brown et
 al.~\cite{Brown2021} applied dataflow transformations to a credit-default-swap
 pricing engine. LightTrader~\cite{Yoo2023} is closest in intent: an FPGA
@@ -264,8 +265,8 @@ throughput, and the present engine gives sub-microsecond single-inference
 latency with re-programmability on a low-cost part. The claim is the
 conjunction of four properties, none individually novel: (i) single-inference
 latency below one microsecond, given analytically and confirmed on hardware;
-(ii) different topologies in one unchanged bitstream; (iii) an Ethernet-to-
-decision path measured end to end and per stage; and (iv) bit-exact agreement
+(ii) different topologies in one unchanged bitstream; (iii) an
+Ethernet-to-decision path measured end to end and per stage; and (iv) bit-exact agreement
 with an independent reference over $4\times10^{5}$ inferences.
 Table~\ref{tab:related_work} positions the work; its latency figures are not
 measured between the same points, and Section~\ref{sec:hls4ml} supplies a
@@ -287,7 +288,7 @@ Study & Platform & Function & Precision & Re-synth. & Net.\ I/O & Reported metri
 Leber et al.~\cite{Leber2011} & Virtex-5 & Feed handler, order gen. & n/a & Yes & Yes & 2.6\,$\mu$s half round trip \\
 Puranik et al.~\cite{Puranik2023} & Zynq & Order processing, HLS & n/a & Yes & No & $\sim$500\,ns per order \\
 Brown et al.~\cite{Brown2021} & Alveo U280 & CDS pricing & Float & Yes & No & 27{,}675 options/s \\
-FINN~\cite{Umuroglu2017} & ZC706 & Binarised MLP/CNN & 1\,bit & Yes & No & 0.31\,$\mu$s, 12.3\,M cls./s \\
+FINN~\cite{Umuroglu2017} & ZC706 & Binarized MLP/CNN & 1\,bit & Yes & No & 0.31\,$\mu$s, 12.3\,M cls./s \\
 hls4ml~\cite{Duarte2018} & Virtex-7 & MLP, trigger & Fixed & Yes & No & $\sim$100\,ns, jet tagging \\
 Angel-Eye~\cite{Guo2018} & Zynq XC7Z045 & CNN compiler & 8/16\,bit & Yes & No & 137\,GOP/s, VGG16 \\
 SparkNoC~\cite{sparknoc} & Arria 10 GX1150 & Lightweight CNN & Fixed & Yes & No & 337.2\,GOP/s \\
