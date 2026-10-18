@@ -19,6 +19,50 @@ SRC = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(SRC, "JSPS_submission")
 TEMPLATE = os.path.join(SRC, "springer_template")  # sn-jnl.cls + bst/
 
+# JSPS her yazar icin kisa biyografi + fotograf istiyor. Foto figures/ altinda
+# yoksa yerine cerceveli bos kutu basilir; foto gelince dosyayi koymak yeter.
+BIOS = [
+    ("bio_ozkaner.jpg", r"Ahmet Batuhan \"Ozkaner",
+     r"""received the B.Sc. degree in energy systems engineering in 2025 and the
+B.Sc. degree in electrical and electronics engineering (double major) in 2026,
+both from \.Istanbul Bilgi University, \.Istanbul, T\"urkiye. Since 2026,
+\"Ozkaner has been an electrical design engineer at R\"onesans Holding,
+\.Istanbul. Research interests include FPGA-based digital design,
+low-latency hardware acceleration of neural network inference, and embedded
+systems."""),
+    # TASLAK: Alper'in CV'si gelince doldurulacak.
+    ("bio_ilik.jpg", r"Mustafa Alper Il{\i}k",
+     r"""is with the Department of Electrical and Electronics Engineering,
+\.Istanbul Bilgi University, \.Istanbul, T\"urkiye. Research interests
+include embedded systems and FPGA-based hardware design."""),
+    ("bio_sarioglu.jpg", r"Baykal Sar{\i}o\u{g}lu",
+     r"""received the B.Sc. degree in electrical and electronics engineering
+from Kadir Has University, \.Istanbul, T\"urkiye, in 2004, and the M.Sc. and
+Ph.D. degrees in electrical and electronics engineering from Bo\u{g}azi\c{c}i
+University, \.Istanbul, in 2007 and 2013, respectively. In 2007 Sar{\i}o\u{g}lu
+worked as an FPGA system engineer at PAVO, and in 2013 was a postdoctoral
+researcher at Bo\u{g}azi\c{c}i University within an EU FP7 project. Sar{\i}o\u{g}lu
+joined the Department of Electrical and Electronics Engineering, \.Istanbul
+Bilgi University, in 2013 and has been an Associate Professor there since
+2023. Research interests include analog and digital integrated circuits,
+biomedical circuits and systems, and embedded system design."""),
+]
+
+
+def biographies():
+    out = []
+    for photo, name, text in BIOS:
+        if os.path.exists(os.path.join(SRC, "figures", photo)):
+            pic = r"\includegraphics[width=\linewidth]{%s}" % photo
+        else:
+            pic = r"\fbox{\parbox[c][1.25\linewidth][c]{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\centering\scriptsize Photo}}"
+        out.append(
+            "\\noindent\\begin{minipage}[t]{0.24\\linewidth}\\vspace{0pt}\n"
+            "%s\n\\end{minipage}\\hfill\n"
+            "\\begin{minipage}[t]{0.72\\linewidth}\\vspace{0pt}\\footnotesize\n"
+            "\\textbf{%s} %s\n\\end{minipage}\n\\par\\medskip\n" % (pic, name, text))
+    return "\n".join(out)
+
 PREAMBLE = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Journal of Signal Processing Systems (Springer) : gonderim formati
 % Sablon: Springer Nature sn-jnl v3.1, sn-mathphys-num (numarali kaynak stili).
@@ -227,30 +271,15 @@ for correcting typographical and language errors in the manuscript. The authors
 reviewed all such output and take full responsibility for the content of this
 article.
 
+{\raggedright
 \bibliography{references}
+\par}
 
-%% TASLAK biyografiler: Batuhan dogrulayacak, fotograflar sonra eklenecek.
 \section*{Author Biographies}
 
-\bmhead{Ahmet Batuhan \"Ozkaner}
-received the B.Sc. degree in Electrical and Electronics Engineering from
-\.Istanbul Bilgi University, \.Istanbul, T\"urkiye. He is currently an
-electrical design engineer at R\"onesans Holding. His research interests
-include FPGA-based digital design, hardware acceleration of neural network
-inference, and embedded systems.
-
-\bmhead{Mustafa Alper Il{\i}k}
-is with the Department of Electrical and Electronics Engineering, \.Istanbul
-Bilgi University, \.Istanbul, T\"urkiye. His research interests include
-embedded systems and FPGA-based hardware design.
-
-\bmhead{Baykal Sar{\i}o\u{g}lu}
-is a faculty member in the Department of Electrical and Electronics
-Engineering, \.Istanbul Bilgi University, \.Istanbul, T\"urkiye. His research
-interests include electronic circuits and systems.
-
+%s
 \end{document}
-""" % (funding, competing, data)
+""" % (funding, competing, data, biographies())
 
     front = PREAMBLE + "\\abstract{%\n" + abstract + "}\n\n" + \
         "\\keywords{" + kw + "}\n\n\\maketitle\n\n"
@@ -266,6 +295,9 @@ interests include electronic circuits and systems.
     used = set(re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", body))
     for name in sorted(used):
         shutil.copy(os.path.join(SRC, "figures", name), OUT)
+    for photo, _, _ in BIOS:
+        if os.path.exists(os.path.join(SRC, "figures", photo)):
+            shutil.copy(os.path.join(SRC, "figures", photo), OUT)
     print("yazildi:", os.path.join(OUT, "main.tex"))
     print("sekil:", len(used), "| anahtar kelime:", kw)
     print("ozet kelime:", len(re.sub(r"\\[A-Za-z]+|[{}]", " ", abstract).split()))
