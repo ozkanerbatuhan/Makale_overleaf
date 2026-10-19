@@ -88,13 +88,14 @@ programmable logic makes latency predictable but normally ties the bitstream to
 one network, so every retrained model costs a synthesis run. This paper
 presents an inference engine that avoids both. The network shape is a run-time
 parameter held in configuration registers, so networks of different topologies
-are deployed into an unchanged bitstream over AXI-Lite with no synthesis step.
-On a low-cost Xilinx Zynq-7000 the engine uses \SI{87.3}{\percent} of the DSP
-slices and \SI{27.0}{\percent} of the LUTs at an estimated \SI{2.70}{\watt},
+are deployed into an unchanged bitstream over a memory-mapped register interface
+with no synthesis step. On a low-cost Xilinx Zynq-7000 the engine uses
+\SI{87.3}{\percent} of the digital signal processing (DSP) slices and
+\SI{27.0}{\percent} of the lookup tables at an estimated \SI{2.70}{\watt},
 closes timing at \SI{125}{\mega\hertz}, and completes an inference in
 \SI{768}{\nano\second}. An on-chip cycle counter shows this latency to be
 invariant: over \num{100000} inferences the standard deviation is zero. The same
-network run bare-metal on the SoC's Cortex-A9 requires
+network run bare-metal on the on-chip Arm Cortex-A9 processor requires
 \SI{52.4}{\micro\second}, 68 times longer. The datapath was verified bit-exactly
 against an independent reference model over \num{400000} inferences across four
 topologies, a process that first exposed three pipeline-alignment defects

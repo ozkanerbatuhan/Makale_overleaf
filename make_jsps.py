@@ -28,11 +28,13 @@ B.Sc. degree in electrical and electronics engineering (double major) in 2026,
 both from \.Istanbul Bilgi University, \.Istanbul, T\"urkiye. Research interests include FPGA-based digital design,
 low-latency hardware acceleration of neural network inference, and embedded
 systems."""),
-    # TASLAK: Alper'in CV'si gelince doldurulacak.
     ("bio_ilik.jpg", r"Mustafa Alper Il{\i}k",
-     r"""is with the Department of Electrical and Electronics Engineering,
-\.Istanbul Bilgi University, \.Istanbul, T\"urkiye. Research interests
-include embedded systems and FPGA-based hardware design."""),
+     r"""received the B.Sc. degree in energy systems engineering in 2025 and the
+B.Sc. degree in electrical and electronics engineering (double major) in 2026,
+both from \.Istanbul Bilgi University, \.Istanbul, T\"urkiye. From 2025 to 2026
+Il{\i}k was an operations and maintenance engineer at Tegnatia Enerji. Research
+interests include machine learning for energy systems and FPGA-based hardware
+design."""),
     ("bio_sarioglu.jpg", r"Baykal Sar{\i}o\u{g}lu",
      r"""received the B.Sc. degree in electrical and electronics engineering
 from Kadir Has University, \.Istanbul, T\"urkiye, in 2004, and the M.Sc. and
