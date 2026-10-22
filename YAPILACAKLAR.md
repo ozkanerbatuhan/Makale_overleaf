@@ -15,7 +15,7 @@ Güncelleme: 29 Temmuz 2026. RTL düzeltildi ve doğrulandı, sentez alındı, m
 
 **A4.** BOOT.bin:
 ```
-cd D:\vitis_projects\lwip_echo_server
+cd D:\30-akademik\hft-nn\hft-vitis\lwip_echo_server
 bootgen -image ..\verify_boot.bif -arch zynq -o BOOT.bin -w on
 ```
 Boyut ~4,8 MB olmalı. 1,3 MB çıkarsa bitstream paketlenmemiştir.

@@ -2,7 +2,7 @@
 
 Kullanim:  python figures/src/grafikler.py
 Cikti   :  figures/lat_cdf_os.pdf, figures/hls4ml_points.pdf
-Veri    :  D:/vitis_projects/pc_test (native Linux ve Windows host koşumlari)
+Veri    :  D:/30-akademik/hft-nn/hft-vitis/pc_test (native Linux ve Windows host koşumlari)
 """
 import csv
 import os
@@ -14,7 +14,7 @@ from matplotlib.lines import Line2D
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.dirname(HERE)
-PC = "D:/vitis_projects/pc_test"
+PC = "D:/30-akademik/hft-nn/hft-vitis/pc_test"
 
 # Kategorik sira sabit: mavi, turuncu, aqua, sari (dataviz referans paleti)
 C = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
