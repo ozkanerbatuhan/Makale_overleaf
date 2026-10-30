@@ -1,0 +1,895 @@
+%% BioMed_Central_Bib_Style_v1.01
+
+\begin{thebibliography}{48}
+% BibTex style file: bmc-mathphys.bst (version 2.1), 2014-07-24
+\ifx \bisbn   \undefined \def \bisbn  #1{ISBN #1}\fi
+\ifx \binits  \undefined \def \binits#1{#1}\fi
+\ifx \bauthor  \undefined \def \bauthor#1{#1}\fi
+\ifx \batitle  \undefined \def \batitle#1{#1}\fi
+\ifx \bjtitle  \undefined \def \bjtitle#1{#1}\fi
+\ifx \bvolume  \undefined \def \bvolume#1{\textbf{#1}}\fi
+\ifx \byear  \undefined \def \byear#1{#1}\fi
+\ifx \bissue  \undefined \def \bissue#1{#1}\fi
+\ifx \bfpage  \undefined \def \bfpage#1{#1}\fi
+\ifx \blpage  \undefined \def \blpage #1{#1}\fi
+\ifx \burl  \undefined \def \burl#1{\textsf{#1}}\fi
+\ifx \doiurl  \undefined \def \doiurl#1{\url{https://doi.org/#1}}\fi
+\ifx \betal  \undefined \def \betal{\textit{et al.}}\fi
+\ifx \binstitute  \undefined \def \binstitute#1{#1}\fi
+\ifx \binstitutionaled  \undefined \def \binstitutionaled#1{#1}\fi
+\ifx \bctitle  \undefined \def \bctitle#1{#1}\fi
+\ifx \beditor  \undefined \def \beditor#1{#1}\fi
+\ifx \bpublisher  \undefined \def \bpublisher#1{#1}\fi
+\ifx \bbtitle  \undefined \def \bbtitle#1{#1}\fi
+\ifx \bedition  \undefined \def \bedition#1{#1}\fi
+\ifx \bseriesno  \undefined \def \bseriesno#1{#1}\fi
+\ifx \blocation  \undefined \def \blocation#1{#1}\fi
+\ifx \bsertitle  \undefined \def \bsertitle#1{#1}\fi
+\ifx \bsnm \undefined \def \bsnm#1{#1}\fi
+\ifx \bsuffix \undefined \def \bsuffix#1{#1}\fi
+\ifx \bparticle \undefined \def \bparticle#1{#1}\fi
+\ifx \barticle \undefined \def \barticle#1{#1}\fi
+\bibcommenthead
+\ifx \bconfdate \undefined \def \bconfdate #1{#1}\fi
+\ifx \botherref \undefined \def \botherref #1{#1}\fi
+\ifx \url \undefined \def \url#1{\textsf{#1}}\fi
+\ifx \bchapter \undefined \def \bchapter#1{#1}\fi
+\ifx \bbook \undefined \def \bbook#1{#1}\fi
+\ifx \bcomment \undefined \def \bcomment#1{#1}\fi
+\ifx \oauthor \undefined \def \oauthor#1{#1}\fi
+\ifx \citeauthoryear \undefined \def \citeauthoryear#1{#1}\fi
+\ifx \endbibitem  \undefined \def \endbibitem {}\fi
+\ifx \bconflocation  \undefined \def \bconflocation#1{#1}\fi
+\ifx \arxivurl  \undefined \def \arxivurl#1{\textsf{#1}}\fi
+\csname PreBibitemsHook\endcsname
+
+%%% 1
+\bibitem[\protect\citeauthoryear{Budish et~al.}{2015}]{Budish2015}
+\begin{barticle}
+\bauthor{\bsnm{Budish}, \binits{E.}},
+\bauthor{\bsnm{Cramton}, \binits{P.}},
+\bauthor{\bsnm{Shim}, \binits{J.}}:
+\batitle{The high-frequency trading arms race: Frequent batch auctions as a
+  market design response}.
+\bjtitle{The Quarterly Journal of Economics}
+\bvolume{130}(\bissue{4}),
+\bfpage{1547}--\blpage{1621}
+(\byear{2015})
+\doiurl{10.1093/qje/qjv027}
+\end{barticle}
+\endbibitem
+
+%%% 2
+\bibitem[\protect\citeauthoryear{Aquilina et~al.}{2022}]{Aquilina2022}
+\begin{barticle}
+\bauthor{\bsnm{Aquilina}, \binits{M.}},
+\bauthor{\bsnm{Budish}, \binits{E.}},
+\bauthor{\bsnm{O'Neill}, \binits{P.}}:
+\batitle{Quantifying the high-frequency trading ``arms race''}.
+\bjtitle{The Quarterly Journal of Economics}
+\bvolume{137}(\bissue{1}),
+\bfpage{493}--\blpage{564}
+(\byear{2022})
+\doiurl{10.1093/qje/qjab032}
+\end{barticle}
+\endbibitem
+
+%%% 3
+\bibitem[\protect\citeauthoryear{Leber et~al.}{2011}]{Leber2011}
+\begin{bchapter}
+\bauthor{\bsnm{Leber}, \binits{C.}},
+\bauthor{\bsnm{Geib}, \binits{B.}},
+\bauthor{\bsnm{Litz}, \binits{H.}}:
+\bctitle{High frequency trading acceleration using {FPGA}s}.
+In: \bbtitle{Proceedings of the 21st International Conference on Field
+  Programmable Logic and Applications (FPL)},
+pp. \bfpage{317}--\blpage{322}
+(\byear{2011}).
+\doiurl{10.1109/FPL.2011.64}
+\end{bchapter}
+\endbibitem
+
+%%% 4
+\bibitem[\protect\citeauthoryear{Lockwood and Monga}{2015}]{Lockwood2015}
+\begin{bchapter}
+\bauthor{\bsnm{Lockwood}, \binits{J.W.}},
+\bauthor{\bsnm{Monga}, \binits{M.}}:
+\bctitle{Implementing ultra low latency data center services with programmable
+  logic}.
+In: \bbtitle{Proceedings of the IEEE 23rd Annual Symposium on High-Performance
+  Interconnects (HOTI)},
+pp. \bfpage{68}--\blpage{77}
+(\byear{2015}).
+\doiurl{10.1109/HOTI.2015.20}
+\end{bchapter}
+\endbibitem
+
+%%% 5
+\bibitem[\protect\citeauthoryear{Puranik et~al.}{2023}]{Puranik2023}
+\begin{barticle}
+\bauthor{\bsnm{Puranik}, \binits{S.}},
+\bauthor{\bsnm{Barve}, \binits{M.}},
+\bauthor{\bsnm{Rodi}, \binits{S.}},
+\bauthor{\bsnm{Patrikar}, \binits{R.}}:
+\batitle{Acceleration of trading system back end with {FPGA}s using high-level
+  synthesis flow}.
+\bjtitle{Electronics}
+\bvolume{12}(\bissue{3}),
+\bfpage{520}
+(\byear{2023})
+\doiurl{10.3390/electronics12030520}
+\end{barticle}
+\endbibitem
+
+%%% 6
+\bibitem[\protect\citeauthoryear{Brown et~al.}{2021}]{Brown2021}
+\begin{bchapter}
+\bauthor{\bsnm{Brown}, \binits{N.}},
+\bauthor{\bsnm{Klaisoongnoen}, \binits{M.}},
+\bauthor{\bsnm{Brown}, \binits{O.T.}}:
+\bctitle{Optimisation of an {FPGA} credit default swap engine by embracing
+  dataflow techniques}.
+In: \bbtitle{IEEE International Conference on Cluster Computing (CLUSTER), FPGA
+  for HPC Workshop}
+(\byear{2021}).
+\doiurl{10.48550/arXiv.2108.03982}
+\end{bchapter}
+\endbibitem
+
+%%% 7
+\bibitem[\protect\citeauthoryear{Oliveira and Bonato}{2023}]{Oliveira2023}
+\begin{barticle}
+\bauthor{\bsnm{Oliveira}, \binits{C.C.S.}},
+\bauthor{\bsnm{Bonato}, \binits{V.}}:
+\batitle{A {FAST} hardware decoder optimized for template features to obtain
+  order book data in low latency}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{95}(\bissue{4}),
+\bfpage{559}--\blpage{567}
+(\byear{2023})
+\doiurl{10.1007/s11265-023-01850-2}
+\end{barticle}
+\endbibitem
+
+%%% 8
+\bibitem[\protect\citeauthoryear{Yoo et~al.}{2023}]{Yoo2023}
+\begin{bchapter}
+\bauthor{\bsnm{Yoo}, \binits{S.}},
+\bauthor{\bsnm{Kim}, \binits{H.}},
+\bauthor{\bsnm{Kim}, \binits{J.}},
+\bauthor{\bsnm{Park}, \binits{S.}},
+\bauthor{\bsnm{Kim}, \binits{J.-Y.}},
+\bauthor{\bsnm{Oh}, \binits{J.}}:
+\bctitle{{LightTrader}: A standalone high-frequency trading system with deep
+  learning inference accelerators and proactive scheduler}.
+In: \bbtitle{Proceedings of the IEEE International Symposium on
+  High-Performance Computer Architecture (HPCA)},
+pp. \bfpage{1017}--\blpage{1030}
+(\byear{2023}).
+\doiurl{10.1109/HPCA56546.2023.10070930}
+\end{bchapter}
+\endbibitem
+
+%%% 9
+\bibitem[\protect\citeauthoryear{Zhang et~al.}{2019}]{Zhang2019}
+\begin{barticle}
+\bauthor{\bsnm{Zhang}, \binits{Z.}},
+\bauthor{\bsnm{Zohren}, \binits{S.}},
+\bauthor{\bsnm{Roberts}, \binits{S.}}:
+\batitle{{DeepLOB}: Deep convolutional neural networks for limit order books}.
+\bjtitle{IEEE Transactions on Signal Processing}
+\bvolume{67}(\bissue{11}),
+\bfpage{3001}--\blpage{3012}
+(\byear{2019})
+\doiurl{10.1109/TSP.2019.2907260}
+\end{barticle}
+\endbibitem
+
+%%% 10
+\bibitem[\protect\citeauthoryear{Ntakaris et~al.}{2018}]{Ntakaris2018}
+\begin{barticle}
+\bauthor{\bsnm{Ntakaris}, \binits{A.}},
+\bauthor{\bsnm{Magris}, \binits{M.}},
+\bauthor{\bsnm{Kanniainen}, \binits{J.}},
+\bauthor{\bsnm{Gabbouj}, \binits{M.}},
+\bauthor{\bsnm{Iosifidis}, \binits{A.}}:
+\batitle{Benchmark dataset for mid-price forecasting of limit order book data
+  with machine learning methods}.
+\bjtitle{Journal of Forecasting}
+\bvolume{37}(\bissue{8}),
+\bfpage{852}--\blpage{866}
+(\byear{2018})
+\doiurl{10.1002/for.2543}
+\end{barticle}
+\endbibitem
+
+%%% 11
+\bibitem[\protect\citeauthoryear{Umuroglu et~al.}{2017}]{Umuroglu2017}
+\begin{bchapter}
+\bauthor{\bsnm{Umuroglu}, \binits{Y.}},
+\bauthor{\bsnm{Fraser}, \binits{N.J.}},
+\bauthor{\bsnm{Gambardella}, \binits{G.}},
+\bauthor{\bsnm{Blott}, \binits{M.}},
+\bauthor{\bsnm{Leong}, \binits{P.}},
+\bauthor{\bsnm{Jahre}, \binits{M.}},
+\bauthor{\bsnm{Vissers}, \binits{K.}}:
+\bctitle{{FINN}: A framework for fast, scalable binarized neural network
+  inference}.
+In: \bbtitle{Proceedings of the ACM/SIGDA International Symposium on
+  Field-Programmable Gate Arrays (FPGA)},
+pp. \bfpage{65}--\blpage{74}
+(\byear{2017}).
+\doiurl{10.1145/3020078.3021744}
+\end{bchapter}
+\endbibitem
+
+%%% 12
+\bibitem[\protect\citeauthoryear{Duarte et~al.}{2018}]{Duarte2018}
+\begin{barticle}
+\bauthor{\bsnm{Duarte}, \binits{J.}},
+\bauthor{\bsnm{Han}, \binits{S.}},
+\bauthor{\bsnm{Harris}, \binits{P.}},
+\bauthor{\bsnm{Jindariani}, \binits{S.}},
+\bauthor{\bsnm{Kreinar}, \binits{E.}},
+\bauthor{\bsnm{Kreis}, \binits{B.}},
+\bauthor{\bsnm{Ngadiuba}, \binits{J.}},
+\bauthor{\bsnm{Pierini}, \binits{M.}},
+\bauthor{\bsnm{Rivera}, \binits{R.}},
+\bauthor{\bsnm{Tran}, \binits{N.}},
+\bauthor{\bsnm{Wu}, \binits{Z.}}:
+\batitle{Fast inference of deep neural networks in {FPGA}s for particle
+  physics}.
+\bjtitle{Journal of Instrumentation}
+\bvolume{13}(\bissue{07}),
+\bfpage{07027}
+(\byear{2018})
+\doiurl{10.1088/1748-0221/13/07/P07027}
+\end{barticle}
+\endbibitem
+
+%%% 13
+\bibitem[\protect\citeauthoryear{Guo et~al.}{2018}]{Guo2018}
+\begin{barticle}
+\bauthor{\bsnm{Guo}, \binits{K.}},
+\bauthor{\bsnm{Sui}, \binits{L.}},
+\bauthor{\bsnm{Qiu}, \binits{J.}},
+\bauthor{\bsnm{Yu}, \binits{J.}},
+\bauthor{\bsnm{Wang}, \binits{J.}},
+\bauthor{\bsnm{Yao}, \binits{S.}},
+\bauthor{\bsnm{Han}, \binits{S.}},
+\bauthor{\bsnm{Wang}, \binits{Y.}},
+\bauthor{\bsnm{Yang}, \binits{H.}}:
+\batitle{{Angel-Eye}: A complete design flow for mapping {CNN} onto embedded
+  {FPGA}}.
+\bjtitle{IEEE Transactions on Computer-Aided Design of Integrated Circuits and
+  Systems}
+\bvolume{37}(\bissue{1}),
+\bfpage{35}--\blpage{47}
+(\byear{2018})
+\doiurl{10.1109/TCAD.2017.2705069}
+\end{barticle}
+\endbibitem
+
+%%% 14
+\bibitem[\protect\citeauthoryear{Xia et~al.}{2021}]{sparknoc}
+\begin{barticle}
+\bauthor{\bsnm{Xia}, \binits{M.}},
+\bauthor{\bsnm{Huang}, \binits{Z.}},
+\bauthor{\bsnm{Tian}, \binits{L.}},
+\bauthor{\bsnm{Wang}, \binits{H.}},
+\bauthor{\bsnm{Chang}, \binits{V.}},
+\bauthor{\bsnm{Zhu}, \binits{Y.}},
+\bauthor{\bsnm{Feng}, \binits{S.}}:
+\batitle{{SparkNoC}: An energy-efficiency {FPGA}-based accelerator using
+  optimized lightweight {CNN} for edge computing}.
+\bjtitle{Journal of Systems Architecture}
+\bvolume{115},
+\bfpage{101991}
+(\byear{2021})
+\doiurl{10.1016/j.sysarc.2021.101991}
+\end{barticle}
+\endbibitem
+
+%%% 15
+\bibitem[\protect\citeauthoryear{Moreau et~al.}{2019}]{Moreau2019}
+\begin{barticle}
+\bauthor{\bsnm{Moreau}, \binits{T.}},
+\bauthor{\bsnm{Chen}, \binits{T.}},
+\bauthor{\bsnm{Vega}, \binits{L.}},
+\bauthor{\bsnm{Roesch}, \binits{J.}},
+\bauthor{\bsnm{Yan}, \binits{E.Q.}},
+\bauthor{\bsnm{Zheng}, \binits{L.}},
+\bauthor{\bsnm{Fromm}, \binits{J.}},
+\bauthor{\bsnm{Jiang}, \binits{Z.}},
+\bauthor{\bsnm{Ceze}, \binits{L.}},
+\bauthor{\bsnm{Guestrin}, \binits{C.}},
+\bauthor{\bsnm{Krishnamurthy}, \binits{A.}}:
+\batitle{A hardware--software blueprint for flexible deep learning
+  specialization}.
+\bjtitle{IEEE Micro}
+\bvolume{39}(\bissue{5}),
+\bfpage{8}--\blpage{16}
+(\byear{2019})
+\doiurl{10.1109/MM.2019.2928962}
+\end{barticle}
+\endbibitem
+
+%%% 16
+\bibitem[\protect\citeauthoryear{Yu et~al.}{2020}]{Yu2020}
+\begin{barticle}
+\bauthor{\bsnm{Yu}, \binits{Y.}},
+\bauthor{\bsnm{Wu}, \binits{C.}},
+\bauthor{\bsnm{Zhao}, \binits{T.}},
+\bauthor{\bsnm{Wang}, \binits{K.}},
+\bauthor{\bsnm{He}, \binits{L.}}:
+\batitle{{OPU}: An {FPGA}-based overlay processor for convolutional neural
+  networks}.
+\bjtitle{IEEE Transactions on Very Large Scale Integration (VLSI) Systems}
+\bvolume{28}(\bissue{1}),
+\bfpage{35}--\blpage{47}
+(\byear{2020})
+\doiurl{10.1109/TVLSI.2019.2939726}
+\end{barticle}
+\endbibitem
+
+%%% 17
+\bibitem[\protect\citeauthoryear{Umuroglu et~al.}{2020}]{Umuroglu2020}
+\begin{bchapter}
+\bauthor{\bsnm{Umuroglu}, \binits{Y.}},
+\bauthor{\bsnm{Akhauri}, \binits{Y.}},
+\bauthor{\bsnm{Fraser}, \binits{N.J.}},
+\bauthor{\bsnm{Blott}, \binits{M.}}:
+\bctitle{{LogicNets}: Co-designed neural networks and circuits for
+  extreme-throughput applications}.
+In: \bbtitle{Proceedings of the 30th International Conference on Field
+  Programmable Logic and Applications (FPL)},
+pp. \bfpage{291}--\blpage{297}
+(\byear{2020}).
+\doiurl{10.1109/FPL50879.2020.00055}
+\end{bchapter}
+\endbibitem
+
+%%% 18
+\bibitem[\protect\citeauthoryear{Zhang et~al.}{2015}]{Zhang2015}
+\begin{bchapter}
+\bauthor{\bsnm{Zhang}, \binits{C.}},
+\bauthor{\bsnm{Li}, \binits{P.}},
+\bauthor{\bsnm{Sun}, \binits{G.}},
+\bauthor{\bsnm{Guan}, \binits{Y.}},
+\bauthor{\bsnm{Xiao}, \binits{B.}},
+\bauthor{\bsnm{Cong}, \binits{J.}}:
+\bctitle{Optimizing {FPGA}-based accelerator design for deep convolutional
+  neural networks}.
+In: \bbtitle{Proceedings of the ACM/SIGDA International Symposium on
+  Field-Programmable Gate Arrays (FPGA)},
+pp. \bfpage{161}--\blpage{170}
+(\byear{2015}).
+\doiurl{10.1145/2684746.2689060}
+\end{bchapter}
+\endbibitem
+
+%%% 19
+\bibitem[\protect\citeauthoryear{Qiu et~al.}{2016}]{Qiu2016}
+\begin{bchapter}
+\bauthor{\bsnm{Qiu}, \binits{J.}},
+\bauthor{\bsnm{Wang}, \binits{J.}},
+\bauthor{\bsnm{Yao}, \binits{S.}},
+\bauthor{\bsnm{Guo}, \binits{K.}},
+\bauthor{\bsnm{Li}, \binits{B.}},
+\bauthor{\bsnm{Zhou}, \binits{E.}},
+\bauthor{\bsnm{Yu}, \binits{J.}},
+\bauthor{\bsnm{Tang}, \binits{T.}},
+\bauthor{\bsnm{Xu}, \binits{N.}},
+\bauthor{\bsnm{Song}, \binits{S.}},
+\bauthor{\bsnm{Wang}, \binits{Y.}},
+\bauthor{\bsnm{Yang}, \binits{H.}}:
+\bctitle{Going deeper with embedded {FPGA} platform for convolutional neural
+  network}.
+In: \bbtitle{Proceedings of the ACM/SIGDA International Symposium on
+  Field-Programmable Gate Arrays (FPGA)},
+pp. \bfpage{26}--\blpage{35}
+(\byear{2016}).
+\doiurl{10.1145/2847263.2847265}
+\end{bchapter}
+\endbibitem
+
+%%% 20
+\bibitem[\protect\citeauthoryear{Blott et~al.}{2018}]{Blott2018}
+\begin{barticle}
+\bauthor{\bsnm{Blott}, \binits{M.}},
+\bauthor{\bsnm{Preu{\ss}er}, \binits{T.B.}},
+\bauthor{\bsnm{Fraser}, \binits{N.J.}},
+\bauthor{\bsnm{Gambardella}, \binits{G.}},
+\bauthor{\bsnm{O'Brien}, \binits{K.}},
+\bauthor{\bsnm{Umuroglu}, \binits{Y.}},
+\bauthor{\bsnm{Leeser}, \binits{M.}},
+\bauthor{\bsnm{Vissers}, \binits{K.}}:
+\batitle{{FINN-R}: An end-to-end deep-learning framework for fast exploration
+  of quantized neural networks}.
+\bjtitle{ACM Transactions on Reconfigurable Technology and Systems}
+\bvolume{11}(\bissue{3}),
+\bfpage{1}--\blpage{23}
+(\byear{2018})
+\doiurl{10.1145/3242897}
+\end{barticle}
+\endbibitem
+
+%%% 21
+\bibitem[\protect\citeauthoryear{Schulte et~al.}{2026}]{Schulte2026}
+\begin{barticle}
+\bauthor{\bsnm{Schulte}, \binits{J.-F.}},
+\bauthor{\bsnm{Ramhorst}, \binits{B.}},
+\bauthor{\bsnm{Sun}, \binits{C.}},
+\bauthor{\bsnm{Mitrevski}, \binits{J.}},
+\bauthor{\bsnm{Ghielmetti}, \binits{N.}},
+\bauthor{\bsnm{Lupi}, \binits{E.}}, \betal:
+\batitle{hls4ml: A flexible, open source platform for deep learning
+  acceleration on reconfigurable hardware}.
+\bjtitle{ACM Transactions on Reconfigurable Technology and Systems}
+\bvolume{19}(\bissue{2}),
+\bfpage{1}--\blpage{35}
+(\byear{2026})
+\doiurl{10.1145/3801979}
+\end{barticle}
+\endbibitem
+
+%%% 22
+\bibitem[\protect\citeauthoryear{Sun et~al.}{2026}]{Sun2026}
+\begin{barticle}
+\bauthor{\bsnm{Sun}, \binits{C.}},
+\bauthor{\bsnm{Que}, \binits{Z.}},
+\bauthor{\bsnm{Loncar}, \binits{V.}},
+\bauthor{\bsnm{Luk}, \binits{W.}},
+\bauthor{\bsnm{Spiropulu}, \binits{M.}}:
+\batitle{da4ml: Distributed arithmetic for real-time neural networks on
+  {FPGAs}}.
+\bjtitle{ACM Transactions on Reconfigurable Technology and Systems}
+\bvolume{19}(\bissue{1}),
+\bfpage{1}--\blpage{27}
+(\byear{2026})
+\doiurl{10.1145/3777387}
+\end{barticle}
+\endbibitem
+
+%%% 23
+\bibitem[\protect\citeauthoryear{de~Broglie et~al.}{2024}]{deBroglie2024}
+\begin{barticle}
+\bauthor{\bsnm{Broglie}, \binits{G.}},
+\bauthor{\bsnm{Morge-Rollet}, \binits{L.}},
+\bauthor{\bsnm{Le~Jeune}, \binits{D.}},
+\bauthor{\bsnm{Le~Roy}, \binits{F.}},
+\bauthor{\bsnm{Roland}, \binits{C.}},
+\bauthor{\bsnm{Canaff}, \binits{C.}},
+\bauthor{\bsnm{Diguet}, \binits{J.-P.}}:
+\batitle{New {LTE-A} low-latency detectors for cognitive radio on low-cost
+  {FPGA} {SoC}}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{96}(\bissue{8-9}),
+\bfpage{479}--\blpage{493}
+(\byear{2024})
+\doiurl{10.1007/s11265-024-01932-9}
+\end{barticle}
+\endbibitem
+
+%%% 24
+\bibitem[\protect\citeauthoryear{Gdaim et~al.}{2026}]{Gdaim2026}
+\begin{barticle}
+\bauthor{\bsnm{Gdaim}, \binits{S.}},
+\bauthor{\bsnm{Bensalem}, \binits{H.}},
+\bauthor{\bsnm{Gagnon}, \binits{G.}}:
+\batitle{Efficient {FPGA} acceleration of deep neural networks for image
+  processing using an {OpenCL}-based high-level synthesis framework}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{98}(\bissue{2}),
+\bfpage{51}
+(\byear{2026})
+\doiurl{10.1007/s11265-026-02014-8}
+\end{barticle}
+\endbibitem
+
+%%% 25
+\bibitem[\protect\citeauthoryear{Rangsikunpum et~al.}{2026}]{Rangsikunpum2026}
+\begin{barticle}
+\bauthor{\bsnm{Rangsikunpum}, \binits{A.}},
+\bauthor{\bsnm{Amiri}, \binits{S.}},
+\bauthor{\bsnm{Ost}, \binits{L.}}:
+\batitle{Low-cost {FPGA}-based hybrid defence against sticker attacks for
+  traffic-sign classification}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{98}(\bissue{1}),
+\bfpage{20}
+(\byear{2026})
+\doiurl{10.1007/s11265-026-01994-x}
+\end{barticle}
+\endbibitem
+
+%%% 26
+\bibitem[\protect\citeauthoryear{{ul~Haq} et~al.}{2026}]{Haq2026}
+\begin{barticle}
+\bauthor{\bsnm{{ul~Haq}}, \binits{M.I.}},
+\bauthor{\bsnm{Koorapati}, \binits{S.}},
+\bauthor{\bsnm{Sheikh}, \binits{Z.R.}},
+\bauthor{\bsnm{Bahadar}, \binits{K.}},
+\bauthor{\bsnm{Deng}, \binits{Y.}}:
+\batitle{{AI}-enhanced {FPGA}-based software defined radio for real-time
+  spectrum sensing and adaptive jamming mitigation}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{98}(\bissue{2}),
+\bfpage{53}
+(\byear{2026})
+\doiurl{10.1007/s11265-026-02026-4}
+\end{barticle}
+\endbibitem
+
+%%% 27
+\bibitem[\protect\citeauthoryear{Mohamed and Cavallaro}{2023}]{Mohamed2023}
+\begin{barticle}
+\bauthor{\bsnm{Mohamed}, \binits{N.}},
+\bauthor{\bsnm{Cavallaro}, \binits{J.}}:
+\batitle{Design and implementation of an {FPGA}-based {DNN} architecture for
+  real-time outlier detection}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{95}(\bissue{7}),
+\bfpage{845}--\blpage{861}
+(\byear{2023})
+\doiurl{10.1007/s11265-023-01835-1}
+\end{barticle}
+\endbibitem
+
+%%% 28
+\bibitem[\protect\citeauthoryear{Gong et~al.}{2025}]{Gong2025}
+\begin{barticle}
+\bauthor{\bsnm{Gong}, \binits{J.}},
+\bauthor{\bsnm{Tao}, \binits{W.}},
+\bauthor{\bsnm{Tian}, \binits{L.}},
+\bauthor{\bsnm{Zhu}, \binits{Y.}},
+\bauthor{\bsnm{Wang}, \binits{H.}}:
+\batitle{{DBiT}: A high-precision binarized {ViT} {FPGA} accelerator}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{97}(\bissue{1}),
+\bfpage{31}--\blpage{47}
+(\byear{2025})
+\doiurl{10.1007/s11265-025-01955-w}
+\end{barticle}
+\endbibitem
+
+%%% 29
+\bibitem[\protect\citeauthoryear{Tsoutsouras et~al.}{2017}]{Tsoutsouras2017}
+\begin{barticle}
+\bauthor{\bsnm{Tsoutsouras}, \binits{V.}},
+\bauthor{\bsnm{Koliogeorgi}, \binits{K.}},
+\bauthor{\bsnm{Xydis}, \binits{S.}},
+\bauthor{\bsnm{Soudris}, \binits{D.}}:
+\batitle{An exploration framework for efficient high-level synthesis of support
+  vector machines: Case study on {ECG} arrhythmia detection for {X}ilinx {Z}ynq
+  {SoC}}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{88}(\bissue{2}),
+\bfpage{127}--\blpage{147}
+(\byear{2017})
+\doiurl{10.1007/s11265-017-1230-1}
+\end{barticle}
+\endbibitem
+
+%%% 30
+\bibitem[\protect\citeauthoryear{Wang et~al.}{2019}]{Wang2019survey}
+\begin{barticle}
+\bauthor{\bsnm{Wang}, \binits{T.}},
+\bauthor{\bsnm{Wang}, \binits{C.}},
+\bauthor{\bsnm{Zhou}, \binits{X.}},
+\bauthor{\bsnm{Chen}, \binits{H.}}:
+\batitle{A survey of {FPGA} based deep learning accelerators: Challenges and
+  opportunities}.
+\bjtitle{arXiv preprint arXiv:1901.04988}
+(\byear{2019})
+\doiurl{10.48550/arXiv.1901.04988}
+\end{barticle}
+\endbibitem
+
+%%% 31
+\bibitem[\protect\citeauthoryear{Rios-Navarro et~al.}{2018}]{RiosNavarro2018}
+\begin{bchapter}
+\bauthor{\bsnm{Rios-Navarro}, \binits{A.}},
+\bauthor{\bsnm{Tapiador-Morales}, \binits{R.}},
+\bauthor{\bsnm{Jimenez-Fernandez}, \binits{A.}},
+\bauthor{\bsnm{Dominguez-Morales}, \binits{M.}},
+\bauthor{\bsnm{Amaya}, \binits{C.}},
+\bauthor{\bsnm{Linares-Barranco}, \binits{A.}}:
+\bctitle{Performance evaluation over {HW/SW} co-design {SoC} memory transfers
+  for a {CNN} accelerator}.
+In: \bbtitle{Proceedings of the IEEE International Conference on Electronics,
+  Circuits and Systems (ICECS)}
+(\byear{2018}).
+\doiurl{10.48550/arXiv.1806.01106}
+\end{bchapter}
+\endbibitem
+
+%%% 32
+\bibitem[\protect\citeauthoryear{Jacob et~al.}{2018}]{Jacob2018}
+\begin{bchapter}
+\bauthor{\bsnm{Jacob}, \binits{B.}},
+\bauthor{\bsnm{Kligys}, \binits{S.}},
+\bauthor{\bsnm{Chen}, \binits{B.}},
+\bauthor{\bsnm{Zhu}, \binits{M.}},
+\bauthor{\bsnm{Tang}, \binits{M.}},
+\bauthor{\bsnm{Howard}, \binits{A.}},
+\bauthor{\bsnm{Adam}, \binits{H.}},
+\bauthor{\bsnm{Kalenichenko}, \binits{D.}}:
+\bctitle{Quantization and training of neural networks for efficient
+  integer-arithmetic-only inference}.
+In: \bbtitle{Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition (CVPR)},
+pp. \bfpage{2704}--\blpage{2713}
+(\byear{2018}).
+\doiurl{10.1109/CVPR.2018.00286}
+\end{bchapter}
+\endbibitem
+
+%%% 33
+\bibitem[\protect\citeauthoryear{Hubara et~al.}{2017}]{Hubara2017}
+\begin{barticle}
+\bauthor{\bsnm{Hubara}, \binits{I.}},
+\bauthor{\bsnm{Courbariaux}, \binits{M.}},
+\bauthor{\bsnm{Soudry}, \binits{D.}},
+\bauthor{\bsnm{El-Yaniv}, \binits{R.}},
+\bauthor{\bsnm{Bengio}, \binits{Y.}}:
+\batitle{Quantized neural networks: Training neural networks with low precision
+  weights and activations}.
+\bjtitle{Journal of Machine Learning Research}
+\bvolume{18}(\bissue{1}),
+\bfpage{6869}--\blpage{6898}
+(\byear{2017})
+\end{barticle}
+\endbibitem
+
+%%% 34
+\bibitem[\protect\citeauthoryear{Gholami et~al.}{2021}]{Gholami2021}
+\begin{barticle}
+\bauthor{\bsnm{Gholami}, \binits{A.}},
+\bauthor{\bsnm{Kim}, \binits{S.}},
+\bauthor{\bsnm{Dong}, \binits{Z.}},
+\bauthor{\bsnm{Yao}, \binits{Z.}},
+\bauthor{\bsnm{Mahoney}, \binits{M.W.}},
+\bauthor{\bsnm{Keutzer}, \binits{K.}}:
+\batitle{A survey of quantization methods for efficient neural network
+  inference}.
+\bjtitle{arXiv preprint arXiv:2103.13630}
+(\byear{2021})
+\doiurl{10.48550/arXiv.2103.13630}
+\end{barticle}
+\endbibitem
+
+%%% 35
+\bibitem[\protect\citeauthoryear{Al-Rikabi and Renczes}{2024}]{AlRikabi2024}
+\begin{barticle}
+\bauthor{\bsnm{Al-Rikabi}, \binits{H.}},
+\bauthor{\bsnm{Renczes}, \binits{B.}}:
+\batitle{Floating-point quantization analysis of multi-layer perceptron
+  artificial neural networks}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{96}(\bissue{4-5}),
+\bfpage{301}--\blpage{312}
+(\byear{2024})
+\doiurl{10.1007/s11265-024-01911-0}
+\end{barticle}
+\endbibitem
+
+%%% 36
+\bibitem[\protect\citeauthoryear{Yu et~al.}{2020}]{YuLight2020}
+\begin{bchapter}
+\bauthor{\bsnm{Yu}, \binits{Y.}},
+\bauthor{\bsnm{Zhao}, \binits{T.}},
+\bauthor{\bsnm{Wang}, \binits{K.}},
+\bauthor{\bsnm{He}, \binits{L.}}:
+\bctitle{{Light-OPU}: An {FPGA}-based overlay processor for lightweight
+  convolutional neural networks}.
+In: \bbtitle{Proceedings of the ACM/SIGDA International Symposium on
+  Field-Programmable Gate Arrays (FPGA)},
+pp. \bfpage{122}--\blpage{132}
+(\byear{2020}).
+\doiurl{10.1145/3373087.3375311}
+\end{bchapter}
+\endbibitem
+
+%%% 37
+\bibitem[\protect\citeauthoryear{{AMD}}{2024}]{AMDVitisAI}
+\begin{botherref}
+\oauthor{\bsnm{{AMD}}}:
+Vitis {AI} Development Environment.
+Product documentation
+(2024).
+\url{https://www.amd.com/en/developer/resources/vitis-ai.html}
+\end{botherref}
+\endbibitem
+
+%%% 38
+\bibitem[\protect\citeauthoryear{Khaki and Choi}{2025}]{Khaki2025}
+\begin{barticle}
+\bauthor{\bsnm{Khaki}, \binits{A.M.Z.}},
+\bauthor{\bsnm{Choi}, \binits{A.}}:
+\batitle{Real-time and resource-efficient embedded computer vision via
+  optimizing lightweight {CNNs} for {FPGA} acceleration}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{97}(\bissue{2--4}),
+\bfpage{185}--\blpage{195}
+(\byear{2025})
+\doiurl{10.1007/s11265-025-01966-7}
+\end{barticle}
+\endbibitem
+
+%%% 39
+\bibitem[\protect\citeauthoryear{Kabir et~al.}{2026}]{Kabir2026}
+\begin{barticle}
+\bauthor{\bsnm{Kabir}, \binits{E.}},
+\bauthor{\bsnm{Bakos}, \binits{J.D.}},
+\bauthor{\bsnm{Andrews}, \binits{D.}},
+\bauthor{\bsnm{Huang}, \binits{M.}}:
+\batitle{A runtime-adaptive transformer neural network accelerator on {FPGAs}}.
+\bjtitle{Microprocessors and Microsystems}
+\bvolume{120},
+\bfpage{105223}
+(\byear{2026})
+\doiurl{10.1016/j.micpro.2025.105223}
+\end{barticle}
+\endbibitem
+
+%%% 40
+\bibitem[\protect\citeauthoryear{Ratto et~al.}{2023}]{Ratto2023}
+\begin{barticle}
+\bauthor{\bsnm{Ratto}, \binits{F.}},
+\bauthor{\bsnm{M\'{a}inez}, \binits{A.P.}},
+\bauthor{\bsnm{Sau}, \binits{C.}},
+\bauthor{\bsnm{Meloni}, \binits{P.}},
+\bauthor{\bsnm{Deriu}, \binits{G.}},
+\bauthor{\bsnm{Delucchi}, \binits{S.}},
+\bauthor{\bsnm{Massa}, \binits{M.}},
+\bauthor{\bsnm{Raffo}, \binits{L.}},
+\bauthor{\bsnm{Palumbo}, \binits{F.}}:
+\batitle{An automated design flow for adaptive neural network hardware
+  accelerators}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{95}(\bissue{9}),
+\bfpage{1091}--\blpage{1113}
+(\byear{2023})
+\doiurl{10.1007/s11265-023-01855-x}
+\end{barticle}
+\endbibitem
+
+%%% 41
+\bibitem[\protect\citeauthoryear{Ezzaoui~Rahali
+  et~al.}{2025}]{EzzaouiRahali2025}
+\begin{botherref}
+\oauthor{\bsnm{Ezzaoui~Rahali}, \binits{H.}},
+\oauthor{\bsnm{Dave}, \binits{A.}},
+\oauthor{\bsnm{Ruckman}, \binits{L.}},
+\oauthor{\bsnm{Rahimifar}, \binits{M.M.}},
+\oauthor{\bsnm{Therrien}, \binits{A.C.}},
+\oauthor{\bsnm{Russel}, \binits{J.J.}},
+\oauthor{\bsnm{Herbst}, \binits{R.T.}}:
+Neural Network Acceleration on {MPSoC} Board: Integrating {SLAC}'s {SNL},
+  {Rogue} Software and {Auto-SNL}.
+arXiv preprint arXiv:2508.21739
+(2025).
+\doiurl{10.48550/arXiv.2508.21739}
+\end{botherref}
+\endbibitem
+
+%%% 42
+\bibitem[\protect\citeauthoryear{Boudjadar et~al.}{2025}]{Boudjadar2025}
+\begin{barticle}
+\bauthor{\bsnm{Boudjadar}, \binits{J.}},
+\bauthor{\bsnm{Islam}, \binits{S.U.}},
+\bauthor{\bsnm{Buyya}, \binits{R.}}:
+\batitle{Dynamic {FPGA} reconfiguration for scalable embedded artificial
+  intelligence ({AI}): A co-design methodology for convolutional neural
+  networks ({CNN}) acceleration}.
+\bjtitle{Future Generation Computer Systems}
+\bvolume{169},
+\bfpage{107777}
+(\byear{2025})
+\doiurl{10.1016/j.future.2025.107777}
+\end{barticle}
+\endbibitem
+
+%%% 43
+\bibitem[\protect\citeauthoryear{Andronic and
+  Constantinides}{2023}]{Andronic2023}
+\begin{bchapter}
+\bauthor{\bsnm{Andronic}, \binits{M.}},
+\bauthor{\bsnm{Constantinides}, \binits{G.A.}}:
+\bctitle{{PolyLUT}: Learning piecewise polynomials for ultra-low latency {FPGA}
+  {LUT}-based inference}.
+In: \bbtitle{Proceedings of the International Conference on Field Programmable
+  Technology (ICFPT)},
+pp. \bfpage{60}--\blpage{68}
+(\byear{2023}).
+\doiurl{10.1109/ICFPT59805.2023.00012}
+\end{bchapter}
+\endbibitem
+
+%%% 44
+\bibitem[\protect\citeauthoryear{Andronic and
+  Constantinides}{2024}]{Andronic2024}
+\begin{bchapter}
+\bauthor{\bsnm{Andronic}, \binits{M.}},
+\bauthor{\bsnm{Constantinides}, \binits{G.A.}}:
+\bctitle{{NeuraLUT}: Hiding neural network density in boolean synthesizable
+  functions}.
+In: \bbtitle{Proceedings of the 34th International Conference on
+  Field-Programmable Logic and Applications (FPL)},
+pp. \bfpage{140}--\blpage{148}
+(\byear{2024}).
+\doiurl{10.1109/FPL64840.2024.00028}
+\end{bchapter}
+\endbibitem
+
+%%% 45
+\bibitem[\protect\citeauthoryear{Lou et~al.}{2024}]{Lou2024}
+\begin{bchapter}
+\bauthor{\bsnm{Lou}, \binits{B.}},
+\bauthor{\bsnm{Rademacher}, \binits{R.}},
+\bauthor{\bsnm{Boland}, \binits{D.}},
+\bauthor{\bsnm{Leong}, \binits{P.H.W.}}:
+\bctitle{{PolyLUT-Add}: {FPGA}-based {LUT} inference with wide inputs}.
+In: \bbtitle{Proceedings of the 34th International Conference on
+  Field-Programmable Logic and Applications (FPL)},
+pp. \bfpage{149}--\blpage{155}
+(\byear{2024}).
+\doiurl{10.1109/FPL64840.2024.00029}
+\end{bchapter}
+\endbibitem
+
+%%% 46
+\bibitem[\protect\citeauthoryear{Andronic and
+  Constantinides}{2025}]{Andronic2025}
+\begin{bchapter}
+\bauthor{\bsnm{Andronic}, \binits{M.}},
+\bauthor{\bsnm{Constantinides}, \binits{G.A.}}:
+\bctitle{{NeuraLUT-Assemble}: Hardware-aware assembling of sub-neural networks
+  for efficient {LUT} inference}.
+In: \bbtitle{Proceedings of the IEEE 33rd Annual International Symposium on
+  Field-Programmable Custom Computing Machines (FCCM)},
+pp. \bfpage{208}--\blpage{216}
+(\byear{2025}).
+\doiurl{10.1109/FCCM62733.2025.00077}
+\end{bchapter}
+\endbibitem
+
+%%% 47
+\bibitem[\protect\citeauthoryear{Khataei and Bazargan}{2025}]{Khataei2025}
+\begin{bchapter}
+\bauthor{\bsnm{Khataei}, \binits{A.}},
+\bauthor{\bsnm{Bazargan}, \binits{K.}}:
+\bctitle{{TreeLUT}: An efficient alternative to deep neural networks for
+  inference acceleration using gradient boosted decision trees}.
+In: \bbtitle{Proceedings of the ACM/SIGDA International Symposium on Field
+  Programmable Gate Arrays (FPGA)},
+pp. \bfpage{14}--\blpage{24}
+(\byear{2025}).
+\doiurl{10.1145/3706628.3708877}
+\end{bchapter}
+\endbibitem
+
+%%% 48
+\bibitem[\protect\citeauthoryear{Gutermann et~al.}{2026}]{Gutermann2026}
+\begin{barticle}
+\bauthor{\bsnm{Gutermann}, \binits{A.}},
+\bauthor{\bsnm{Serdyuk}, \binits{A.}},
+\bauthor{\bsnm{Paraskevas}, \binits{F.}},
+\bauthor{\bsnm{Toto~Kiesa}, \binits{H.}},
+\bauthor{\bsnm{Lesniak}, \binits{F.}},
+\bauthor{\bsnm{Schwarz}, \binits{J.}},
+\bauthor{\bsnm{Hartmann}, \binits{M.}},
+\bauthor{\bsnm{Harbaum}, \binits{T.}},
+\bauthor{\bsnm{Becker}, \binits{J.}}:
+\batitle{Joint exploration of neural networks and systolic hardware for
+  improved {AI} accelerator performance}.
+\bjtitle{Journal of Signal Processing Systems}
+\bvolume{98}(\bissue{2}),
+\bfpage{42}
+(\byear{2026})
+\doiurl{10.1007/s11265-026-02012-w}
+\end{barticle}
+\endbibitem
+
+\end{thebibliography}

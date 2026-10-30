@@ -9,6 +9,11 @@ kabul etmedigi icin sekiller duz klasore kopyalanir ve yollar duzeltilir.
 
 Kullanim:  python make_jsps.py
 Cikti   :  JSPS_submission/  (main.tex, references.bib, sn-jnl.cls, .bst, sekiller)
+
+27 Eki 2026: EMEKLI. Baykal Hoca'nin duzeltmeleri ve final duzenlemeler dogrudan
+JSPS_submission/main.tex uzerinde yapildi; ana kaynak artik o dosya. Bu betik
+koşarsa eski elsarticle main.tex'ten uretip finali ezer, bu yuzden --force
+olmadan calismaz. Eski cikti: surumler/JSPS_submission_orijinal_2026-10-19/.
 """
 import os
 import re
@@ -146,6 +151,9 @@ def between(s, a, b):
 
 
 def main():
+    if "--force" not in sys.argv:
+        sys.exit("make_jsps.py emekli: JSPS_submission/main.tex ana kaynak, ezilmez "
+                 "(bilerek ezmek icin --force).")
     tex = open(os.path.join(SRC, "main.tex"), encoding="utf-8").read()
 
     abstract = between(tex, r"\begin{abstract}", r"\end{abstract}").strip()
